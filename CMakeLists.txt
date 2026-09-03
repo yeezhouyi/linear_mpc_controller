@@ -25,6 +25,9 @@ add_library(linear_mpc_core
   src/mpc/qp_problem.cpp
   src/mpc/linear_mpc.cpp
 )
+if(LINEAR_MPC_WITH_OSQP)
+  target_sources(linear_mpc_core PRIVATE src/mpc/osqp_solver.cpp)
+endif()
 target_include_directories(linear_mpc_core PUBLIC include)
 target_link_libraries(linear_mpc_core PUBLIC Eigen3::Eigen)
 if(LINEAR_MPC_WITH_OSQP)
