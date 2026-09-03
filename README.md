@@ -14,9 +14,9 @@
 | **Python 参考核心** | `mpc_core/`：frenet / model / qp(自研稠密 ADMM) / mpc / fallback / episode | ✅ 本机 45+ 测试全绿 |
 | **轨迹工具** | `trajectory_tools/`：直线/圆/S/U-turn 生成器 + 位姿补全曲率/速度 | ✅ |
 | **基准工具** | `benchmark_tools/`：RMSE/p95/max + QP 统计 + run manifest | ✅ 基线见下 |
-| **C++/Eigen 核心** | `include/ src/`（model/mpc/safety，U2–U4 结构） | 🕐 按计划写好，**WSL2 colcon 编译/测试门槛未跑**（本机无工具链） |
-| **ROS2 层** | `ros2/`（linear_mpc_node / trajectory_adapter / velocity_arbiter）+ launch/config/worlds + `test/test_ros_contract.py` | 🕐 源码骨架 + 结构契约测试绿；**Gazebo 闭环待 WSL2** |
-| **RL 环境** | `mpc_rl_env/`：fast env（观测/残差动作/安全投影/奖励/终止/随机化）+ PPO 训练入口 + config | 🕐 契约/奖励/投影测试绿；**训练需 torch+SB3 环境** |
+| **C++/Eigen 核心** | `include/ src/`（model/mpc/safety，U2–U4 结构） | ✅ **WSL2 门槛通过**：`cmake -DBUILD_TESTING=ON` 构建 + ctest 全绿 |
+| **ROS2 层** | `ros2/`（linear_mpc_node / trajectory_adapter / velocity_arbiter）+ launch/config/worlds + `test/test_ros_contract.py` | ✅ WSL2 `colcon build` 绿；契约测试 5/5 绿；launch 已修复为按安装 share 目录解析 world/config（OpaqueFunction）；**Gazebo TurtleBot3 闭环冒烟待跑（U5/C3 验收项）** |
+| **RL 环境** | `mpc_rl_env/`：fast env + `gym_adapter`（SB3 env_checker 绿）+ PPO 训练入口 + config | ✅ 契约/奖励/投影/gym 适配测试全绿（系统 python 跳过 gym 测试，mc_venv 全绿）；**残差 PPO 训练运行中（seed 0, 200k steps）** |
 | **系统辨识** | `system_identification/`：一阶滞后 + 延迟拟合（独立验证集） | ✅ 测试绿 |
 
 ## 参考核心基线（纯 MPC，离线，无扰动）
