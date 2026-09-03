@@ -1,0 +1,1 @@
+/usr/bin/c++ CMakeFiles/test_linear_mpc_core.dir/test/test_core.cpp.o -o test_linear_mpc_core  liblinear_mpc_core.a 

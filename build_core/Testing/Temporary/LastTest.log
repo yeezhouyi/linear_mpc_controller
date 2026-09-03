@@ -1,0 +1,23 @@
+Start testing: Sep 02 22:10 CST
+----------------------------------------------------------
+1/1 Testing: core
+1/1 Test: core
+Command: "/home/zhouyi/ros2_ws/src/linear_mpc_controller/build_core/test_linear_mpc_core"
+Directory: /home/zhouyi/ros2_ws/src/linear_mpc_controller/build_core
+"core" start time: Sep 02 22:10 CST
+Output:
+----------------------------------------------------------
+test_linearisation OK
+test_discretisation OK (zoh err 1.41e-08)
+test_frenet_signs OK
+test_fallback OK (emergency after 7 cycles)
+all C++ core tests passed
+<end of output>
+Test time =   0.00 sec
+----------------------------------------------------------
+Test Passed.
+"core" end time: Sep 02 22:10 CST
+"core" time elapsed: 00:00:00
+----------------------------------------------------------
+
+End testing: Sep 02 22:10 CST

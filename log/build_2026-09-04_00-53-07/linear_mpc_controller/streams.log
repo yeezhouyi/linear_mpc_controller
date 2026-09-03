@@ -1,0 +1,52 @@
+[0.014s] Invoking command in '/home/zhouyi/build_lmpc/linear_mpc_controller': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy /usr/bin/cmake /home/zhouyi/ros2_ws/src/linear_mpc_controller -DAMENT_CMAKE_SYMLINK_INSTALL=1 -DCMAKE_INSTALL_PREFIX=/home/zhouyi/install_lmpc/linear_mpc_controller
+[0.273s] -- Override CMake install command with custom implementation using symlinks instead of copying resources
+[0.300s] -- Found rclcpp: 28.1.18 (/opt/ros/jazzy/share/rclcpp/cmake)
+[0.642s] -- Found rosidl_generator_c: 4.6.7 (/opt/ros/jazzy/share/rosidl_generator_c/cmake)
+[0.655s] -- Found rosidl_generator_cpp: 4.6.7 (/opt/ros/jazzy/share/rosidl_generator_cpp/cmake)
+[0.676s] -- Using all available rosidl_typesupport_c: rosidl_typesupport_fastrtps_c;rosidl_typesupport_introspection_c
+[0.698s] -- Using all available rosidl_typesupport_cpp: rosidl_typesupport_fastrtps_cpp;rosidl_typesupport_introspection_cpp
+[0.790s] -- Found rmw_implementation_cmake: 7.3.3 (/opt/ros/jazzy/share/rmw_implementation_cmake/cmake)
+[0.793s] -- Found rmw_fastrtps_cpp: 8.4.3 (/opt/ros/jazzy/share/rmw_fastrtps_cpp/cmake)
+[1.209s] -- Using RMW implementation 'rmw_fastrtps_cpp' as default
+[1.634s] -- Found rclcpp_lifecycle: 28.1.18 (/opt/ros/jazzy/share/rclcpp_lifecycle/cmake)
+[1.677s] -- Found std_msgs: 5.3.7 (/opt/ros/jazzy/share/std_msgs/cmake)
+[1.706s] -- Found nav_msgs: 5.3.7 (/opt/ros/jazzy/share/nav_msgs/cmake)
+[1.911s] -- Configuring done (1.9s)
+[1.947s] -- Generating done (0.0s)
+[1.956s] -- Build files have been written to: /home/zhouyi/build_lmpc/linear_mpc_controller
+[1.964s] Invoked command in '/home/zhouyi/build_lmpc/linear_mpc_controller' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy /usr/bin/cmake /home/zhouyi/ros2_ws/src/linear_mpc_controller -DAMENT_CMAKE_SYMLINK_INSTALL=1 -DCMAKE_INSTALL_PREFIX=/home/zhouyi/install_lmpc/linear_mpc_controller
+[1.966s] Invoking command in '/home/zhouyi/build_lmpc/linear_mpc_controller': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy /usr/bin/cmake --build /home/zhouyi/build_lmpc/linear_mpc_controller -- -j20 -l20
+[2.027s] [ 41%] Built target linear_mpc_core
+[2.029s] [ 50%] Linking CXX executable velocity_arbiter_node
+[2.052s] [ 66%] Built target test_linear_mpc_core
+[2.059s] [ 75%] Linking CXX executable linear_mpc_node
+[2.706s] [ 83%] Built target velocity_arbiter_node
+[2.978s] [100%] Built target linear_mpc_node
+[2.989s] Invoked command in '/home/zhouyi/build_lmpc/linear_mpc_controller' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy /usr/bin/cmake --build /home/zhouyi/build_lmpc/linear_mpc_controller -- -j20 -l20
+[2.999s] Invoking command in '/home/zhouyi/build_lmpc/linear_mpc_controller': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy /usr/bin/cmake --install /home/zhouyi/build_lmpc/linear_mpc_controller
+[3.006s] -- Install configuration: ""
+[3.006s] -- Execute custom install script
+[3.007s] -- Symlinking: /home/zhouyi/install_lmpc/linear_mpc_controller/lib/linear_mpc_controller/linear_mpc_node
+[3.016s] -- Symlinking: /home/zhouyi/install_lmpc/linear_mpc_controller/lib/linear_mpc_controller/velocity_arbiter_node
+[3.027s] -- Symlinking: /home/zhouyi/install_lmpc/linear_mpc_controller/share/linear_mpc_controller/launch/__pycache__/linear_mpc_sim.launch.cpython-312.pyc
+[3.037s] -- Symlinking: /home/zhouyi/install_lmpc/linear_mpc_controller/share/linear_mpc_controller/launch/linear_mpc_sim.launch.py
+[3.046s] -- Symlinking: /home/zhouyi/install_lmpc/linear_mpc_controller/share/linear_mpc_controller/config/linear_mpc_params.yaml
+[3.055s] -- Symlinking: /home/zhouyi/install_lmpc/linear_mpc_controller/share/linear_mpc_controller/config/velocity_arbiter.yaml
+[3.064s] -- Symlinking: /home/zhouyi/install_lmpc/linear_mpc_controller/share/linear_mpc_controller/worlds/tracking_empty.sdf
+[3.073s] -- Symlinking: /home/zhouyi/install_lmpc/linear_mpc_controller/share/linear_mpc_controller/maps/README.md
+[3.083s] -- Symlinking: /home/zhouyi/install_lmpc/linear_mpc_controller/share/ament_index/resource_index/package_run_dependencies/linear_mpc_controller
+[3.095s] -- Symlinking: /home/zhouyi/install_lmpc/linear_mpc_controller/share/ament_index/resource_index/parent_prefix_path/linear_mpc_controller
+[3.106s] -- Symlinking: /home/zhouyi/install_lmpc/linear_mpc_controller/share/linear_mpc_controller/environment/ament_prefix_path.sh
+[3.115s] -- Symlinking: /home/zhouyi/install_lmpc/linear_mpc_controller/share/linear_mpc_controller/environment/ament_prefix_path.dsv
+[3.124s] -- Symlinking: /home/zhouyi/install_lmpc/linear_mpc_controller/share/linear_mpc_controller/environment/path.sh
+[3.133s] -- Symlinking: /home/zhouyi/install_lmpc/linear_mpc_controller/share/linear_mpc_controller/environment/path.dsv
+[3.142s] -- Symlinking: /home/zhouyi/install_lmpc/linear_mpc_controller/share/linear_mpc_controller/local_setup.bash
+[3.150s] -- Symlinking: /home/zhouyi/install_lmpc/linear_mpc_controller/share/linear_mpc_controller/local_setup.sh
+[3.160s] -- Symlinking: /home/zhouyi/install_lmpc/linear_mpc_controller/share/linear_mpc_controller/local_setup.zsh
+[3.171s] -- Symlinking: /home/zhouyi/install_lmpc/linear_mpc_controller/share/linear_mpc_controller/local_setup.dsv
+[3.182s] -- Symlinking: /home/zhouyi/install_lmpc/linear_mpc_controller/share/linear_mpc_controller/package.dsv
+[3.191s] -- Symlinking: /home/zhouyi/install_lmpc/linear_mpc_controller/share/ament_index/resource_index/packages/linear_mpc_controller
+[3.201s] -- Symlinking: /home/zhouyi/install_lmpc/linear_mpc_controller/share/linear_mpc_controller/cmake/linear_mpc_controllerConfig.cmake
+[3.211s] -- Symlinking: /home/zhouyi/install_lmpc/linear_mpc_controller/share/linear_mpc_controller/cmake/linear_mpc_controllerConfig-version.cmake
+[3.221s] -- Symlinking: /home/zhouyi/install_lmpc/linear_mpc_controller/share/linear_mpc_controller/package.xml
+[3.233s] Invoked command in '/home/zhouyi/build_lmpc/linear_mpc_controller' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy /usr/bin/cmake --install /home/zhouyi/build_lmpc/linear_mpc_controller

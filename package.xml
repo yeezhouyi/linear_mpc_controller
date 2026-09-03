@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>linear_mpc_controller</name>
+  <version>0.3.0</version>
+  <description>
+    Differential-drive trajectory tracking: ROS-free linear time-varying MPC
+    core (Frenet errors, condensed QP, fallback contract) plus ROS2 nodes,
+    trajectory adapter, velocity arbiter and reference tooling. Advancement
+    of yeezhouyi/mpc_controller per the 12-week linear-MPC+residual-RL plan.
+  </description>
+  <maintainer email="1529198419@qq.com">yeezhouyi</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>ament_cmake_python</buildtool_depend>
+
+  <depend>rclcpp</depend>
+  <depend>rclcpp_lifecycle</depend>
+  <depend>std_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>geometry_msgs</depend>
+
+  <test_depend>ament_cmake_pytest</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

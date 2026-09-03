@@ -1,0 +1,46 @@
+-- Override CMake install command with custom implementation using symlinks instead of copying resources
+-- Found rclcpp: 28.1.18 (/opt/ros/jazzy/share/rclcpp/cmake)
+-- Found rosidl_generator_c: 4.6.7 (/opt/ros/jazzy/share/rosidl_generator_c/cmake)
+-- Found rosidl_generator_cpp: 4.6.7 (/opt/ros/jazzy/share/rosidl_generator_cpp/cmake)
+-- Using all available rosidl_typesupport_c: rosidl_typesupport_fastrtps_c;rosidl_typesupport_introspection_c
+-- Using all available rosidl_typesupport_cpp: rosidl_typesupport_fastrtps_cpp;rosidl_typesupport_introspection_cpp
+-- Found rmw_implementation_cmake: 7.3.3 (/opt/ros/jazzy/share/rmw_implementation_cmake/cmake)
+-- Found rmw_fastrtps_cpp: 8.4.3 (/opt/ros/jazzy/share/rmw_fastrtps_cpp/cmake)
+-- Using RMW implementation 'rmw_fastrtps_cpp' as default
+-- Found rclcpp_lifecycle: 28.1.18 (/opt/ros/jazzy/share/rclcpp_lifecycle/cmake)
+-- Found std_msgs: 5.3.7 (/opt/ros/jazzy/share/std_msgs/cmake)
+-- Found nav_msgs: 5.3.7 (/opt/ros/jazzy/share/nav_msgs/cmake)
+-- Configuring done (1.9s)
+-- Generating done (0.0s)
+-- Build files have been written to: /home/zhouyi/build_lmpc/linear_mpc_controller
+[ 41%] Built target linear_mpc_core
+[ 50%] Linking CXX executable velocity_arbiter_node
+[ 66%] Built target test_linear_mpc_core
+[ 75%] Linking CXX executable linear_mpc_node
+[ 83%] Built target velocity_arbiter_node
+[100%] Built target linear_mpc_node
+-- Install configuration: ""
+-- Execute custom install script
+-- Symlinking: /home/zhouyi/install_lmpc/linear_mpc_controller/lib/linear_mpc_controller/linear_mpc_node
+-- Symlinking: /home/zhouyi/install_lmpc/linear_mpc_controller/lib/linear_mpc_controller/velocity_arbiter_node
+-- Symlinking: /home/zhouyi/install_lmpc/linear_mpc_controller/share/linear_mpc_controller/launch/__pycache__/linear_mpc_sim.launch.cpython-312.pyc
+-- Symlinking: /home/zhouyi/install_lmpc/linear_mpc_controller/share/linear_mpc_controller/launch/linear_mpc_sim.launch.py
+-- Symlinking: /home/zhouyi/install_lmpc/linear_mpc_controller/share/linear_mpc_controller/config/linear_mpc_params.yaml
+-- Symlinking: /home/zhouyi/install_lmpc/linear_mpc_controller/share/linear_mpc_controller/config/velocity_arbiter.yaml
+-- Symlinking: /home/zhouyi/install_lmpc/linear_mpc_controller/share/linear_mpc_controller/worlds/tracking_empty.sdf
+-- Symlinking: /home/zhouyi/install_lmpc/linear_mpc_controller/share/linear_mpc_controller/maps/README.md
+-- Symlinking: /home/zhouyi/install_lmpc/linear_mpc_controller/share/ament_index/resource_index/package_run_dependencies/linear_mpc_controller
+-- Symlinking: /home/zhouyi/install_lmpc/linear_mpc_controller/share/ament_index/resource_index/parent_prefix_path/linear_mpc_controller
+-- Symlinking: /home/zhouyi/install_lmpc/linear_mpc_controller/share/linear_mpc_controller/environment/ament_prefix_path.sh
+-- Symlinking: /home/zhouyi/install_lmpc/linear_mpc_controller/share/linear_mpc_controller/environment/ament_prefix_path.dsv
+-- Symlinking: /home/zhouyi/install_lmpc/linear_mpc_controller/share/linear_mpc_controller/environment/path.sh
+-- Symlinking: /home/zhouyi/install_lmpc/linear_mpc_controller/share/linear_mpc_controller/environment/path.dsv
+-- Symlinking: /home/zhouyi/install_lmpc/linear_mpc_controller/share/linear_mpc_controller/local_setup.bash
+-- Symlinking: /home/zhouyi/install_lmpc/linear_mpc_controller/share/linear_mpc_controller/local_setup.sh
+-- Symlinking: /home/zhouyi/install_lmpc/linear_mpc_controller/share/linear_mpc_controller/local_setup.zsh
+-- Symlinking: /home/zhouyi/install_lmpc/linear_mpc_controller/share/linear_mpc_controller/local_setup.dsv
+-- Symlinking: /home/zhouyi/install_lmpc/linear_mpc_controller/share/linear_mpc_controller/package.dsv
+-- Symlinking: /home/zhouyi/install_lmpc/linear_mpc_controller/share/ament_index/resource_index/packages/linear_mpc_controller
+-- Symlinking: /home/zhouyi/install_lmpc/linear_mpc_controller/share/linear_mpc_controller/cmake/linear_mpc_controllerConfig.cmake
+-- Symlinking: /home/zhouyi/install_lmpc/linear_mpc_controller/share/linear_mpc_controller/cmake/linear_mpc_controllerConfig-version.cmake
+-- Symlinking: /home/zhouyi/install_lmpc/linear_mpc_controller/share/linear_mpc_controller/package.xml

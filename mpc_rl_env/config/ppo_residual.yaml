@@ -1,0 +1,32 @@
+# PPO residual policy configuration (R19/R20). Training entry:
+#   python mpc_rl_env/algorithms/train_ppo_residual.py --env fast_tracking
+policy: ppo_residual
+seed: 0
+total_timesteps: 200_000
+alpha_residual: 0.5        # residual gain (curriculum hook)
+n_steps: 512
+batch_size: 128
+gamma: 0.99
+gae_lambda: 0.95
+clip_range: 0.2
+ent_coef: 0.0
+vf_coef: 0.5
+max_grad_norm: 0.5
+learning_rate: 3.0e-4
+policy_kwargs:
+  net_arch: [128, 128]
+env:
+  difficulty: 0.3
+  tracks: [straight, circle]
+  max_episode_steps: 600
+reward_weights:
+  w_e: 1.0
+  lam_psi: 0.25
+  w_v: 0.2
+  w_u: 0.05
+  w_p: 1.0
+  w_c: 20.0
+  w_q: 2.0
+evaluation:
+  seeds: [0, 1, 2]
+  tracks: [s_curve, u_turn]     # unseen during training (C7)

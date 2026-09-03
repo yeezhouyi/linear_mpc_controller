@@ -1,0 +1,2 @@
+/usr/bin/ar qc liblinear_mpc_core.a CMakeFiles/linear_mpc_core.dir/src/model/differential_drive_model.cpp.o CMakeFiles/linear_mpc_core.dir/src/mpc/fallback_policy.cpp.o CMakeFiles/linear_mpc_core.dir/src/mpc/qp_problem.cpp.o CMakeFiles/linear_mpc_core.dir/src/mpc/linear_mpc.cpp.o
+/usr/bin/ranlib liblinear_mpc_core.a

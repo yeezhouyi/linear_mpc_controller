@@ -1,0 +1,19 @@
+# linear_mpc_node parameters (mirror MpcParams; see docs/ros2_interface_contract.md)
+linear_mpc_node:
+  ros__parameters:
+    Ts: 0.05          # s (20 Hz) -- frozen by U1
+    N: 25             # prediction horizon (steps)
+    Q_diag: [60.0, 10.0, 2.0, 1.0]    # [e_y, e_psi, v, omega]
+    Q_F_diag: [120.0, 20.0, 4.0, 2.0] # terminal weights
+    S_diag: [0.5, 0.5]                # accel penalty [a, alpha]
+    v_min: 0.0        # m/s (forward-only MVP)
+    v_max: 1.5        # m/s
+    omega_max: 2.0    # rad/s
+    a_max: 1.0        # m/s^2
+    alpha_max: 2.0    # rad/s^2
+    lookahead_m: 0.0  # keep 0 until C5 delay compensation is quantified
+    traj_max_age_s: 5.0
+    odom_max_age_s: 0.5
+    adapter:
+      v_default: 0.5  # m/s
+      v_max: 1.5      # m/s
