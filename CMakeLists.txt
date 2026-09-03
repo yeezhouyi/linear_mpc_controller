@@ -58,6 +58,12 @@ if(ament_cmake_FOUND)
   ament_target_dependencies(velocity_arbiter_node rclcpp geometry_msgs)
   install(TARGETS velocity_arbiter_node DESTINATION lib/${PROJECT_NAME})
 
+  find_package(ament_cmake_python QUIET)
+  if(ament_cmake_python_FOUND)
+    install(PROGRAMS ros2/trajectory_server.py
+      DESTINATION lib/${PROJECT_NAME})
+  endif()
+
   install(DIRECTORY launch config worlds maps
     DESTINATION share/${PROJECT_NAME})
   ament_package()
