@@ -53,6 +53,8 @@ public:
     const c_int n = toCsc(H.selfadjointView<Eigen::Upper>(), true, px, pi, pp);
     const c_int m = toCsc(C, false, ax, ai, ap);
 
+    fprintf(stderr, "[osqp_solver] n=%d m=%d nnzP=%d nnzA=%d
+", (int)n, (int)m, (int)px.size(), (int)ax.size());
     std::vector<c_float> qv(q.data(), q.data() + q.size());
     std::vector<c_float> lv(l.data(), l.data() + l.size());
     std::vector<c_float> uv(u.data(), u.data() + u.size());
@@ -79,6 +81,8 @@ public:
 
     OSQPWorkspace * work = nullptr;
     const c_int ret = osqp_setup(&work, &data, &settings);
+    fprintf(stderr, "[osqp_solver] setup ret=%d work=%p
+", (int)ret, (void*)work);
     if (ret != 0 || work == nullptr) {
       sol.status = QpSolution::Status::kFailed;
       return sol;
@@ -87,7 +91,7 @@ public:
     // warm start from the previous stacked solution when the layout matches
     if (warm_start.size() == static_cast<Eigen::Index>(n)) {
       std::vector<c_float> w(warm_start.data(), warm_start.data() + n);
-      osqp_warm_start(work, w.data(), nullptr);
+      osqp_warm_start_x(work, w.data());
     }
 
     const c_int st = osqp_solve(work);
