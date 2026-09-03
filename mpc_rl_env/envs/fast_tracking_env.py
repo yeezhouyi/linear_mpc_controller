@@ -41,6 +41,7 @@ class ResidualTrackingEnv:
         term_cfg: Optional[TerminationConfig] = None,
         alpha_residual: float = 1.0,
         difficulty: float = 0.3,
+        use_projection: bool = True,
     ) -> None:
         self.traj = traj
         self.mpc_params = mpc_params or MpcParams()
@@ -49,6 +50,8 @@ class ResidualTrackingEnv:
         self.term_cfg = term_cfg or TerminationConfig()
         self.alpha = float(alpha_residual)
         self.difficulty = float(difficulty)
+        self.use_projection = bool(use_projection)  # False only for the
+        # no-safety-projection ablation (C8): residual is fused raw.
         self.projection = SafetyProjection(
             v_min=self.mpc_params.v_min,
             v_max=self.mpc_params.v_max,
@@ -64,6 +67,7 @@ class ResidualTrackingEnv:
         self._prev_cmd = np.zeros(2)
         self._arc_hist: list = []
         self._delay_buf: list = []
+        self.projection_trigger_count = 0
         self._obs = np.zeros(12)
 
     # -- MDP API (gymnasium-free) -------------------------------------------
@@ -87,6 +91,7 @@ class ResidualTrackingEnv:
         self._prev_cmd = np.zeros(2)
         self._arc_hist = []
         self._delay_buf = []
+        self.projection_trigger_count = 0
         self._obs = self._observe()
         return self._obs.copy(), {}
 
@@ -102,7 +107,15 @@ class ResidualTrackingEnv:
 
         # 2) residual fusion + safety projection
         delta = np.array([action[0] * ACTION_DV_MAX, action[1] * ACTION_DW_MAX])
-        cmd = self.projection.project(u_mpc, delta, self.alpha, self._prev_cmd)
+        raw_cmd = u_mpc + self.alpha * delta
+        if self.use_projection:
+            cmd = self.projection.project(u_mpc, delta, self.alpha, self._prev_cmd)
+            projected = bool(np.any(cmd != raw_cmd))
+        else:
+            # C8 ablation: fuse raw, no actuation projection
+            cmd = raw_cmd
+            projected = False
+        self.projection_trigger_count += int(projected)
 
         # 3) command delay (integer steps) then plant step
         self._delay_buf.append(cmd.copy())
@@ -137,7 +150,10 @@ class ResidualTrackingEnv:
             completed=(reason == "completed"),
         )
         self._obs = self._observe()
-        info = {"reason": reason, "e_y": float(e_y), "health": int(out.diag.health)}
+        info = {"reason": reason, "e_y": float(e_y), "e_psi": float(e_psi),
+                "health": int(out.diag.health),
+                "projection_triggers": self.projection_trigger_count,
+                "projection_active": self.use_projection}
         return self._obs.copy(), float(reward), bool(terminated), info
 
     def _observe(self) -> np.ndarray:
