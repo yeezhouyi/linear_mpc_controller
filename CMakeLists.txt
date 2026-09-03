@@ -65,7 +65,8 @@ if(ament_cmake_FOUND)
   if(ament_cmake_python_FOUND)
     install(PROGRAMS ros2/trajectory_server.py
       DESTINATION lib/${PROJECT_NAME})
-    ament_python_install_package(mpc_core trajectory_tools)
+    ament_python_install_package(mpc_core)
+    ament_python_install_package(trajectory_tools)
   endif()
 
   install(DIRECTORY launch config worlds maps
