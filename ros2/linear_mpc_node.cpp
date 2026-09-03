@@ -81,8 +81,14 @@ public:
       "~/reference", rclcpp::SystemDefaultsQoS(),
       [this](nav_msgs::msg::Path::SharedPtr msg) {
         last_traj_ = adaptPath(*msg, adap_);
+        // (re)load the reference into the controller — without this the
+        // core keeps its empty constructor trajectory and stays in
+        // NO_REFERENCE fallback forever (found in the first Gazebo gate)
+        if (!last_traj_.empty()) {
+          mpc_->setReference(last_traj_);
+        }
         traj_stamp_ = now();
-        have_traj_ = true;
+        have_traj_ = !last_traj_.empty();
       });
     cmd_pub_ = create_publisher<geometry_msgs::msg::TwistStamped>(
       "cmd_vel_mpc", rclcpp::SystemDefaultsQoS());
