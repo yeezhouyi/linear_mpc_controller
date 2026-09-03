@@ -93,6 +93,12 @@ public:
     const c_int st = osqp_solve(work);
     const auto t1 = std::chrono::steady_clock::now();
 
+    if (st != OSQP_SOLVED && st != OSQP_SOLVED_INACCURATE) {
+      fprintf(stderr, "[osqp_solver] failed: status=%d iter=%d
+",
+        static_cast<int>(st), static_cast<int>(work->info->iter));
+    }
+
     if (st == OSQP_SOLVED || st == OSQP_SOLVED_INACCURATE) {
       sol.status = (st == OSQP_SOLVED) ? QpSolution::Status::kSolved :
         QpSolution::Status::kApproximate;
