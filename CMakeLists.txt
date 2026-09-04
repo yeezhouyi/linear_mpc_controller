@@ -39,6 +39,11 @@ if(BUILD_TESTING)
   add_executable(test_linear_mpc_core test/test_core.cpp)
   target_link_libraries(test_linear_mpc_core PRIVATE linear_mpc_core)
   add_test(NAME core COMMAND test_linear_mpc_core)
+  if(LINEAR_MPC_WITH_OSQP)
+    add_executable(test_qp_cycle test/test_qp_cycle.cpp)
+    target_link_libraries(test_qp_cycle PRIVATE linear_mpc_core)
+    add_test(NAME qp_cycle COMMAND test_qp_cycle)
+  endif()
 endif()
 
 # ---- ROS2 nodes (only under colcon/ament) ----

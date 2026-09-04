@@ -5,6 +5,8 @@
 #include "linear_mpc_controller/mpc/qp_problem.hpp"
 
 #include <chrono>
+#include <cmath>
+#include <iostream>
 #include <osqp.h>
 
 #include <Eigen/Sparse>
@@ -50,13 +52,36 @@ public:
 
     std::vector<c_float> px, ax;
     std::vector<c_int> pi, pp, ai, ap;
-    const c_int n = toCsc(H.selfadjointView<Eigen::Upper>(), true, px, pi, pp);
-    const c_int m = toCsc(C, false, ax, ai, ap);
+    toCsc(H.selfadjointView<Eigen::Upper>(), true, px, pi, pp);
+    toCsc(C, false, ax, ai, ap);
+    const c_int n = static_cast<c_int>(H.cols());
+    const c_int m = static_cast<c_int>(C.rows());
 
     fprintf(stderr, "[osqp_solver] n=%d m=%d nnzP=%d nnzA=%d\n", (int)n, (int)m, (int)px.size(), (int)ax.size());
+    std::cout << "[osqp_solver] n=" << n << " m=" << m << " nnzP=" << px.size() << " nnzA=" << ax.size() << std::endl;
     std::vector<c_float> qv(q.data(), q.data() + q.size());
     std::vector<c_float> lv(l.data(), l.data() + l.size());
     std::vector<c_float> uv(u.data(), u.data() + u.size());
+    // OSQP 0.6.2 + IEEE inf in l/u corrupts the heap on this vendor build;
+    // saturate to large finite bounds instead (|v| > 1e20 means inf).
+    for (auto & v : lv) if (v < -1e20) v = -1e20;
+    for (auto & v : uv) if (v > 1e20) v = 1e20;
+
+    // CSC self-check: catch inconsistent col_ptr before OSQP copies data
+    auto validate = [](const std::vector<c_int> & p, const std::vector<c_int> & i,
+      const std::vector<c_float> & x, c_int cols) {
+      if (static_cast<c_int>(p.size()) != cols + 1) return "p size mismatch";
+      if (p.front() != 0 || p.back() != static_cast<c_int>(x.size())) return "p ends mismatch";
+      if (static_cast<c_int>(i.size()) != static_cast<c_int>(x.size())) return "i size mismatch";
+      for (c_int j = 0; j < cols; ++j)
+        if (p[j] > p[j + 1]) return "p not monotonic";
+      for (const auto v : x) if (!std::isfinite(v)) return "non-finite value";
+      return "";
+    };
+    const char *errP = validate(pp, pi, px, n);
+    const char *errA = validate(ap, ai, ax, static_cast<c_int>(C.cols()));
+    std::cout << "[osqp_solver] validate P=" << (errP ? errP : "ok")
+      << " A=" << (errA ? errA : "ok") << std::endl;
 
     OSQPData data{};
     data.n = n;
@@ -73,13 +98,12 @@ public:
     settings.max_iter = max_iter_;
     settings.eps_abs = abs_tol_;
     settings.eps_rel = rel_tol_;
-    settings.eps_prim_inf = 1e-6;
-    settings.eps_dual_inf = 1e-6;
     settings.polish = 1;
     settings.warm_start = 1;
 
     OSQPWorkspace * work = nullptr;
-    const c_int ret = osqp_setup(&work, &data, &settings);
+        const c_int ret = osqp_setup(&work, &data, &settings);
+    std::cout << "[osqp_solver] setup ret=" << ret << std::endl;
     fprintf(stderr, "[osqp_solver] setup ret=%d work=%p\n", (int)ret, (void*)work);
     if (ret != 0 || work == nullptr) {
       sol.status = QpSolution::Status::kFailed;
@@ -93,15 +117,17 @@ public:
     }
 
     const c_int st = osqp_solve(work);
+    const c_int status_val = (st == 0) ? work->info->status_val : st;
     const auto t1 = std::chrono::steady_clock::now();
 
-    if (st != OSQP_SOLVED && st != OSQP_SOLVED_INACCURATE) {
-      fprintf(stderr, "[osqp_solver] failed: status=%d iter=%d\n",
-        static_cast<int>(st), static_cast<int>(work->info->iter));
+
+    if (status_val != OSQP_SOLVED && status_val != OSQP_SOLVED_INACCURATE) {
+      std::cout << "[osqp_solver] solve failed status_val=" << status_val
+        << " iter=" << work->info->iter << std::endl;
     }
 
-    if (st == OSQP_SOLVED || st == OSQP_SOLVED_INACCURATE) {
-      sol.status = (st == OSQP_SOLVED) ? QpSolution::Status::kSolved :
+    if (status_val == OSQP_SOLVED || status_val == OSQP_SOLVED_INACCURATE) {
+      sol.status = (status_val == OSQP_SOLVED) ? QpSolution::Status::kSolved :
         QpSolution::Status::kApproximate;
       sol.u = Eigen::VectorXd::Zero(n);
       for (c_int i = 0; i < n; ++i) {
