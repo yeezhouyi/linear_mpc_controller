@@ -68,9 +68,22 @@ class CurriculumV2Env:
         self._build_inner()
 
     def _build_inner(self):
+        # raw core env (4-tuple API); the caller wraps THIS wrapper in the
+        # gym adapter exactly once — no double wrapping
+        from mpc_rl_env.envs.fast_tracking_env import ResidualTrackingEnv
+        from mpc_rl_env.envs.reward import RewardWeights
+
         track = self._tracks[self._ep % len(self._tracks)]
-        inner_seed = self._seed + self._ep
-        self._inner = build_env(self._cfg, inner_seed, track)
+        rw = self._cfg["reward_weights"]
+        self._inner = ResidualTrackingEnv(
+            generate_benchmark_tracks()[track],
+            mpc_params=MpcParams(N=25),
+            reward_w=RewardWeights(**rw),
+            alpha_residual=self._cfg["alpha_residual"],
+            difficulty=self._cfg["env"]["difficulty"],
+        )
+        # reseed the inner profile rotation deterministically per episode
+        self._inner.reset(seed=self._seed + self._ep)
         self._track_name = track
 
     def __getattr__(self, name):
@@ -79,7 +92,8 @@ class CurriculumV2Env:
     def reset(self, *, seed=None, options=None):
         self._ep += 1
         self._build_inner()
-        return self._inner.reset(seed=seed, options=options)
+        # raw core env takes seed only (no options kwarg)
+        return self._inner.reset(seed=seed)
 
     def step(self, action):
         return self._inner.step(action)
