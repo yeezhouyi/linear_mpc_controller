@@ -49,6 +49,48 @@ def build_env(cfg: dict, seed: int, track: str):
     return GymResidualTrackingEnv(env)
 
 
+class CurriculumV2Env:
+    """Multi-track curriculum wrapper (U5/A7 v2).
+
+    Each reset() advances a round-robin over ``train.trajectories`` and
+    rotates the inner profile seed over ``train.seeds``.  Observation and
+    action spaces are identical across tracks (12 / 2), so SB3 needs no
+    adaptation.  Delegates everything else to the per-track inner env.
+    """
+
+    def __init__(self, cfg: dict, seed: int):
+        self._cfg = cfg
+        self._seed = seed
+        self._tracks: list = list(cfg.get("train", {}).get(
+            "trajectories", ["circle"]))
+        self._ep = 0
+        self._inner = None
+        self._build_inner()
+
+    def _build_inner(self):
+        track = self._tracks[self._ep % len(self._tracks)]
+        inner_seed = self._seed + self._ep
+        self._inner = build_env(self._cfg, inner_seed, track)
+        self._track_name = track
+
+    def __getattr__(self, name):
+        return getattr(self._inner, name)
+
+    def reset(self, *, seed=None, options=None):
+        self._ep += 1
+        self._build_inner()
+        return self._inner.reset(seed=seed, options=options)
+
+    def step(self, action):
+        return self._inner.step(action)
+
+
+def build_env_v2(cfg: dict, seed: int):
+    from mpc_rl_env.envs.gym_adapter import GymResidualTrackingEnv
+
+    return GymResidualTrackingEnv(CurriculumV2Env(cfg, seed))
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--seed", type=int, default=0)
@@ -59,7 +101,12 @@ def main() -> None:
     args = ap.parse_args()
 
     cfg = load_config(args.config)
-    env = build_env(cfg, args.seed, args.track)
+    if cfg.get("train", {}).get("trajectories"):
+        # v2 curriculum: rotate all benchmark tracks per episode (A7/U5)
+        env = build_env_v2(cfg, args.seed)
+        print(f"[train] curriculum v2: tracks={cfg['train']['trajectories']}")
+    else:
+        env = build_env(cfg, args.seed, args.track)
 
     try:
         import gymnasium as gym  # noqa: F401
