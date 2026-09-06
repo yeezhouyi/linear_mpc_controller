@@ -57,7 +57,6 @@ public:
     const c_int n = static_cast<c_int>(H.cols());
     const c_int m = static_cast<c_int>(C.rows());
 
-    fprintf(stderr, "[osqp_solver] n=%d m=%d nnzP=%d nnzA=%d\n", (int)n, (int)m, (int)px.size(), (int)ax.size());
     std::cout << "[osqp_solver] n=" << n << " m=" << m << " nnzP=" << px.size() << " nnzA=" << ax.size() << std::endl;
     std::vector<c_float> qv(q.data(), q.data() + q.size());
     std::vector<c_float> lv(l.data(), l.data() + l.size());
@@ -104,7 +103,6 @@ public:
     OSQPWorkspace * work = nullptr;
         const c_int ret = osqp_setup(&work, &data, &settings);
     std::cout << "[osqp_solver] setup ret=" << ret << std::endl;
-    fprintf(stderr, "[osqp_solver] setup ret=%d work=%p\n", (int)ret, (void*)work);
     if (ret != 0 || work == nullptr) {
       sol.status = QpSolution::Status::kFailed;
       return sol;

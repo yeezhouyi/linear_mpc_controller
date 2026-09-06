@@ -13,6 +13,10 @@ find_package(Eigen3 3.4 REQUIRED NO_MODULE)
 
 # OSQP is optional for the core (model/fallback tests do not need it).
 # The realtime solver gate requires OSQP (plan KTD12, frozen in deps.repos).
+# OSQP backend uses the 0.6.x classic C API (osqp_setup/osqp_solve/
+# info->status_val).  Validated against ros-jazzy-osqp-vendor 0.2.0
+# (OSQP 0.6.2); newer 1.x has an incompatible API.  Golden cross-check
+# against the Python AdmmQp reference: test/test_qp_golden.cpp.
 option(LINEAR_MPC_WITH_OSQP "Enable OSQP-backed QP solver" OFF)
 if(LINEAR_MPC_WITH_OSQP)
   find_package(osqp REQUIRED)
@@ -43,6 +47,11 @@ if(BUILD_TESTING)
     add_executable(test_qp_cycle test/test_qp_cycle.cpp)
     target_link_libraries(test_qp_cycle PRIVATE linear_mpc_core)
     add_test(NAME qp_cycle COMMAND test_qp_cycle)
+    add_executable(test_qp_golden test/test_qp_golden.cpp)
+    target_compile_definitions(test_qp_golden PRIVATE
+      GOLDEN_FILE="${CMAKE_CURRENT_SOURCE_DIR}/test/golden_qp_vectors.txt")
+    target_link_libraries(test_qp_golden PRIVATE linear_mpc_core)
+    add_test(NAME qp_golden COMMAND test_qp_golden)
   endif()
 endif()
 
