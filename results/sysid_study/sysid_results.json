@@ -1,0 +1,59 @@
+{
+ "identification": [
+  {
+   "true_lag_s": 0.01,
+   "fit_lag_s": Infinity,
+   "fit_delay_steps": 0,
+   "fit_gain": 0.9963,
+   "vaf": 0.9792,
+   "tau_err_pct": Infinity
+  },
+  {
+   "true_lag_s": 0.02,
+   "fit_lag_s": 0.0142,
+   "fit_delay_steps": 0,
+   "fit_gain": 0.9943,
+   "vaf": 0.9822,
+   "tau_err_pct": 29.1
+  },
+  {
+   "true_lag_s": 0.04,
+   "fit_lag_s": 0.0385,
+   "fit_delay_steps": 0,
+   "fit_gain": 0.994,
+   "vaf": 0.9892,
+   "tau_err_pct": 3.9
+  }
+ ],
+ "lookahead_compare": [
+  {
+   "e_y_rms": 0.0569,
+   "completed": true,
+   "termination": "completed",
+   "track": "s_curve",
+   "tag": "lookahead=0"
+  },
+  {
+   "e_y_rms": 0.0587,
+   "completed": true,
+   "termination": "completed",
+   "track": "s_curve",
+   "tag": "lookahead=fit"
+  },
+  {
+   "e_y_rms": 0.0337,
+   "completed": true,
+   "termination": "completed",
+   "track": "u_turn",
+   "tag": "lookahead=0"
+  },
+  {
+   "e_y_rms": 0.0446,
+   "completed": true,
+   "termination": "completed",
+   "track": "u_turn",
+   "tag": "lookahead=fit"
+  }
+ ],
+ "fitted_delay_wire_m": 0.05
+}
