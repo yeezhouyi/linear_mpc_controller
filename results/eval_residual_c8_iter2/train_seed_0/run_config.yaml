@@ -1,0 +1,59 @@
+cfg:
+  acceptance:
+    compare_against: results/mpc_baseline
+    require_safety_violations: 0
+  action_mode: residual_only
+  algorithm: PPO
+  alpha_residual: 0.3
+  batch_size: 128
+  clip_range: 0.2
+  ent_coef: 0.005
+  env:
+    difficulty: 0.3
+    max_episode_steps: 400
+  gae_lambda: 0.95
+  gamma: 0.99
+  learning_rate: 0.0003
+  max_grad_norm: 0.5
+  n_steps: 512
+  policy: ppo_residual
+  randomization:
+    delay_seconds:
+    - 0.0
+    - 0.08
+    friction_scale:
+    - 0.85
+    - 1.15
+    initial_error_xy_m: 0.05
+    wheelbase_scale:
+    - 0.98
+    - 1.02
+  reward_weights:
+    lam_psi: 0.25
+    w_c: 20.0
+    w_e: 1.0
+    w_p: 1.0
+    w_q: 2.0
+    w_u: 0.05
+    w_v: 0.2
+  safety_projection: enabled
+  seed: 0
+  total_timesteps: 1000000
+  train:
+    evaluation_seeds:
+    - 100
+    - 101
+    - 102
+    seeds:
+    - 0
+    - 1
+    - 2
+    total_timesteps: 1000000
+    trajectories:
+    - straight
+    - circle
+    - s_curve
+    - u_turn
+  version: ppo-residual-curriculum-v2
+  vf_coef: 0.5
+seed: 0
