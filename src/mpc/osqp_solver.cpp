@@ -76,9 +76,8 @@ public:
       for (const auto v : x) if (!std::isfinite(v)) return "non-finite value";
       return "";
     };
-    const char *errP = validate(pp, pi, px, n);
-    const char *errA = validate(ap, ai, ax, static_cast<c_int>(C.cols()));
-      << " A=" << (errA ? errA : "ok") << std::endl;
+    (void)validate(pp, pi, px, n);
+    (void)validate(ap, ai, ax, static_cast<c_int>(C.cols()));
 
     OSQPData data{};
     data.n = n;
@@ -117,7 +116,6 @@ public:
 
 
     if (status_val != OSQP_SOLVED && status_val != OSQP_SOLVED_INACCURATE) {
-        << " iter=" << work->info->iter << std::endl;
     }
 
     if (status_val == OSQP_SOLVED || status_val == OSQP_SOLVED_INACCURATE) {
