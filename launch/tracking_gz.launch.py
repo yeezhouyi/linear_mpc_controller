@@ -40,6 +40,7 @@ TB3_SIM_SHARE = get_package_share_directory("nav2_minimal_tb3_sim")
 def _setup(context, *args, **kwargs):
     track = LaunchConfiguration("track").perform(context)
     use_sim_time = LaunchConfiguration("use_sim_time").perform(context)
+    path_file = LaunchConfiguration("path_file").perform(context)
     sim_time = use_sim_time.lower() in ("1", "true")
 
     world_src = os.path.join(PKG_SHARE, "worlds", "tracking_empty.sdf")
@@ -100,16 +101,17 @@ def _setup(context, *args, **kwargs):
         }],
         output="screen",
     )
+    traj_params = {"track": track, "rate_hz": 2.0,
+                   "topic": "/linear_mpc_node/reference",
+                   "use_sim_time": sim_time}
+    if path_file:
+        traj_params["path_file"] = path_file  # B4/B6: recorded explorer path
     traj_server = Node(
         package="linear_mpc_controller",
         executable="trajectory_server.py",
         name="trajectory_server",
         output="screen",
-        parameters=[{
-            "track": track, "rate_hz": 2.0,
-            "topic": "/linear_mpc_node/reference",
-            "use_sim_time": sim_time,
-        }],
+        parameters=[traj_params],
     )
     mpc = LifecycleNode(
         package="linear_mpc_controller",
@@ -166,6 +168,7 @@ def generate_launch_description():
     return LaunchDescription(
         [
             DeclareLaunchArgument("track", default_value="circle"),
+            DeclareLaunchArgument("path_file", default_value=""),
             DeclareLaunchArgument("use_sim_time", default_value="true"),
             OpaqueFunction(function=_setup),
         ]
