@@ -1,0 +1,2 @@
+WARNING: topic [/linear_mpc_node/diagnostics] does not appear to be published yet
+Could not determine the type for the passed topic
