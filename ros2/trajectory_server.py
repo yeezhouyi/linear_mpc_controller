@@ -24,7 +24,9 @@ from nav_msgs.msg import Path
 
 # Make the source-layout packages importable when run from the repo
 # (colcon-installed deployments should provide trajectory_tools on sys.path).
-_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# resolve() follows the colcon symlink back to the real repo root
+_ROOT = os.path.dirname(os.path.dirname(
+    os.path.realpath(os.path.abspath(__file__))))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 if "/home/zhouyi/ros2_ws/src/linear_mpc_controller" not in sys.path and os.path.isdir(
@@ -78,8 +80,10 @@ class TrajectoryServer(Node):
 
         import numpy as np
 
-        sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(
-            os.path.abspath(__file__))), "benchmark_tools", "scripts"))
+        _scripts = os.path.join(os.path.dirname(os.path.dirname(
+            os.path.realpath(os.path.abspath(__file__)))),
+            "benchmark_tools", "scripts")
+        sys.path.insert(0, _scripts)
         from replay_path_mpc import build_trajectory
 
         rec = json.loads(open(path_file).read())
