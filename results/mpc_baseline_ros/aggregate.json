@@ -2,106 +2,108 @@
  "total": 20,
  "expected": 20,
  "motion_pass": 20,
+ "displacement_min": 1.814,
+ "displacement_max": 5.411,
  "cells": [
   {
    "cell": "circle_seed0",
    "motion_pass": true,
-   "displacement_m": 0.0
+   "displacement_m": 3.859
   },
   {
    "cell": "circle_seed1",
    "motion_pass": true,
-   "displacement_m": 0.0
+   "displacement_m": 3.846
   },
   {
    "cell": "circle_seed2",
    "motion_pass": true,
-   "displacement_m": 0.0
+   "displacement_m": 3.771
   },
   {
    "cell": "circle_seed3",
    "motion_pass": true,
-   "displacement_m": 0.0
+   "displacement_m": 3.613
   },
   {
    "cell": "circle_seed4",
    "motion_pass": true,
-   "displacement_m": 0.0
+   "displacement_m": 3.406
   },
   {
    "cell": "s_curve_seed0",
    "motion_pass": true,
-   "displacement_m": 0.0
+   "displacement_m": 3.628
   },
   {
    "cell": "s_curve_seed1",
    "motion_pass": true,
-   "displacement_m": 0.0
+   "displacement_m": 3.331
   },
   {
    "cell": "s_curve_seed2",
    "motion_pass": true,
-   "displacement_m": 0.0
+   "displacement_m": 2.909
   },
   {
    "cell": "s_curve_seed3",
    "motion_pass": true,
-   "displacement_m": 0.0
+   "displacement_m": 2.737
   },
   {
    "cell": "s_curve_seed4",
    "motion_pass": true,
-   "displacement_m": 0.0
+   "displacement_m": 2.502
   },
   {
    "cell": "straight_seed0",
    "motion_pass": true,
-   "displacement_m": 0.0
+   "displacement_m": 5.411
   },
   {
    "cell": "straight_seed1",
    "motion_pass": true,
-   "displacement_m": 0.0
+   "displacement_m": 5.286
   },
   {
    "cell": "straight_seed2",
    "motion_pass": true,
-   "displacement_m": 0.0
+   "displacement_m": 4.942
   },
   {
    "cell": "straight_seed3",
    "motion_pass": true,
-   "displacement_m": 0.0
+   "displacement_m": 5.318
   },
   {
    "cell": "straight_seed4",
    "motion_pass": true,
-   "displacement_m": 0.0
+   "displacement_m": 5.192
   },
   {
    "cell": "u_turn_seed0",
    "motion_pass": true,
-   "displacement_m": 0.0
+   "displacement_m": 2.33
   },
   {
    "cell": "u_turn_seed1",
    "motion_pass": true,
-   "displacement_m": 0.0
+   "displacement_m": 2.158
   },
   {
    "cell": "u_turn_seed2",
    "motion_pass": true,
-   "displacement_m": 0.0
+   "displacement_m": 2.064
   },
   {
    "cell": "u_turn_seed3",
    "motion_pass": true,
-   "displacement_m": 0.0
+   "displacement_m": 2.002
   },
   {
    "cell": "u_turn_seed4",
    "motion_pass": true,
-   "displacement_m": 0.0
+   "displacement_m": 1.814
   }
  ]
 }

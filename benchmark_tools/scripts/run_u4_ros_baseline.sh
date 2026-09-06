@@ -58,6 +58,7 @@ done
 echo "=== aggregate ==="
 python3 - << 'PYEOF'
 import json
+import re
 from pathlib import Path
 out = Path("/home/zhouyi/ros2_ws/src/linear_mpc_controller/results/mpc_baseline_ros")
 rows = []
@@ -66,12 +67,8 @@ for cell in sorted(out.iterdir()):
         continue
     mt = (cell / "motion.txt").read_text() if (cell / "motion.txt").exists() else ""
     passed = "PASS" in mt
-    disp = 0.0
-    for tok in mt.split():
-        try:
-            disp = max(disp, float(tok))
-        except ValueError:
-            pass
+    m = re.search(r"displacement=([0-9.]+)", mt)
+    disp = float(m.group(1)) if m else 0.0
     rows.append({"cell": cell.name, "motion_pass": passed,
                  "displacement_m": disp})
 ok = sum(1 for r in rows if r["motion_pass"])
