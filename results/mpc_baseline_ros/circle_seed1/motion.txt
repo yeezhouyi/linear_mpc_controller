@@ -1,0 +1,2 @@
+[INFO] [1788692303.057705907] [motion_check]: PASS: displacement=3.846 m
+motion_rc=0
