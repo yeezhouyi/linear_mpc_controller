@@ -1,0 +1,10 @@
+{
+ "path_length_m": 101.428,
+ "recorded_poses": 1820,
+ "completed": false,
+ "steps": 18000,
+ "e_y_rms": 0.0099,
+ "e_y_p95": 0.0099,
+ "e_y_max": 0.0126,
+ "smooth_du": 1.1e-05
+}
