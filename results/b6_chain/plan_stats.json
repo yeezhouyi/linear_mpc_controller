@@ -1,0 +1,10 @@
+{
+ "map": "/home/zhouyi/b6_chain/map_saved.yaml",
+ "known_free_cells": 7860,
+ "executable_cells": 6266,
+ "path_waypoints": 250,
+ "planned_coverage": 1.0,
+ "planner_reason": "OK",
+ "path_length_m": 69.95,
+ "speed_mps": 0.3
+}
