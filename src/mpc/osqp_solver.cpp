@@ -57,7 +57,6 @@ public:
     const c_int n = static_cast<c_int>(H.cols());
     const c_int m = static_cast<c_int>(C.rows());
 
-    std::cout << "[osqp_solver] n=" << n << " m=" << m << " nnzP=" << px.size() << " nnzA=" << ax.size() << std::endl;
     std::vector<c_float> qv(q.data(), q.data() + q.size());
     std::vector<c_float> lv(l.data(), l.data() + l.size());
     std::vector<c_float> uv(u.data(), u.data() + u.size());
@@ -79,7 +78,6 @@ public:
     };
     const char *errP = validate(pp, pi, px, n);
     const char *errA = validate(ap, ai, ax, static_cast<c_int>(C.cols()));
-    std::cout << "[osqp_solver] validate P=" << (errP ? errP : "ok")
       << " A=" << (errA ? errA : "ok") << std::endl;
 
     OSQPData data{};
@@ -102,7 +100,6 @@ public:
 
     OSQPWorkspace * work = nullptr;
         const c_int ret = osqp_setup(&work, &data, &settings);
-    std::cout << "[osqp_solver] setup ret=" << ret << std::endl;
     if (ret != 0 || work == nullptr) {
       sol.status = QpSolution::Status::kFailed;
       return sol;
@@ -120,7 +117,6 @@ public:
 
 
     if (status_val != OSQP_SOLVED && status_val != OSQP_SOLVED_INACCURATE) {
-      std::cout << "[osqp_solver] solve failed status_val=" << status_val
         << " iter=" << work->info->iter << std::endl;
     }
 
