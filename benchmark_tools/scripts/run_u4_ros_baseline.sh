@@ -14,8 +14,9 @@ cd "$MPC"
 source ~/build_lmpc/install/setup.bash 2>/dev/null || source ~/install_lmpc/setup.bash
 export TURTLEBOT3_MODEL=waffle
 
-pkill -9 -f "gz [s]im" 2>/dev/null; pkill -9 -f "[l]inear_mpc" 2>/dev/null
-pkill -9 -f "[t]rajectory_server" 2>/dev/null; pkill -9 -f "[v]elocity_arbiter" 2>/dev/null
+pkill -9 -f "gz [s]im" 2>/dev/null; pkill -9 -f "linear_mpc_[n]ode" 2>/dev/null
+pkill -9 -f "trajectory_[s]erver" 2>/dev/null; pkill -9 -f "velocity_[a]rbiter" 2>/dev/null
+pkill -9 -f "cmd_vel_ts_[b]ridge" 2>/dev/null
 sleep 2
 ros2 daemon stop >/dev/null 2>&1
 rm -f /dev/shm/fastrtps_* /dev/shm/fast_datasharing* 2>/dev/null
@@ -28,10 +29,10 @@ for track in straight circle s_curve u_turn; do
     mkdir -p "$cell"
     echo "[$n/20] $track seed=$seed"
     pkill -9 -f "gz [s]im" 2>/dev/null
-    pkill -9 -f "[l]inear_mpc" 2>/dev/null
-    pkill -9 -f "[t]rajectory_server" 2>/dev/null
-    pkill -9 -f "[v]elocity_arbiter" 2>/dev/null
-    pkill -9 -f "[c]md_vel_ts_bridge" 2>/dev/null
+    pkill -9 -f "linear_mpc_[n]ode" 2>/dev/null
+    pkill -9 -f "trajectory_[s]erver" 2>/dev/null
+    pkill -9 -f "velocity_[a]rbiter" 2>/dev/null
+    pkill -9 -f "cmd_vel_ts_[b]ridge" 2>/dev/null
     sleep 2
     ros2 daemon stop >/dev/null 2>&1
     rm -f /dev/shm/fastrtps_* /dev/shm/fast_datasharing* 2>/dev/null
