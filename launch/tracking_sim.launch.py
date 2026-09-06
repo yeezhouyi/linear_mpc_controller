@@ -24,7 +24,7 @@ from launch.actions import (
 from launch.events import matches_action
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
-from launch_ros.actions import Node
+from launch_ros.actions import LifecycleNode, Node
 from launch_ros.event_handlers import OnStateTransition
 from launch_ros.events.lifecycle import ChangeState
 from lifecycle_msgs.msg import Transition
@@ -37,6 +37,7 @@ def _setup(context, *args, **kwargs):
     track = LaunchConfiguration("track").perform(context)
     headless = LaunchConfiguration("headless").perform(context)
     use_sim_time = LaunchConfiguration("use_sim_time").perform(context)
+    path_file = LaunchConfiguration("path_file").perform(context)
     sim_time = use_sim_time.lower() in ("1", "true")
     # nav2_bringup evaluates some args with PythonExpression, which needs
     # Python literals ("True"), not YAML-style "true".
@@ -69,22 +70,24 @@ def _setup(context, *args, **kwargs):
         output="screen",
     )
 
+    traj_params = {"track": track, "rate_hz": 2.0,
+                   "topic": "/linear_mpc_node/reference",
+                   "use_sim_time": sim_time}
+    if path_file:
+        traj_params["path_file"] = path_file  # B4/B6: recorded explorer path
     traj_server = Node(
         package="linear_mpc_controller",
         executable="trajectory_server.py",
         name="trajectory_server",
         output="screen",
-        parameters=[
-            {"track": track, "rate_hz": 2.0,
-             "topic": "/linear_mpc_node/reference",
-             "use_sim_time": sim_time},
-        ],
+        parameters=[traj_params],
     )
 
-    mpc = Node(
+    mpc = LifecycleNode(
         package="linear_mpc_controller",
         executable="linear_mpc_node",
         name="linear_mpc_node",
+        namespace="",
         output="screen",
         parameters=[
             os.path.join(CONFIG_DIR, "linear_mpc_params.yaml"),
@@ -130,6 +133,7 @@ def generate_launch_description():
     return LaunchDescription(
         [
             DeclareLaunchArgument("track", default_value="circle"),
+            DeclareLaunchArgument("path_file", default_value=""),
             DeclareLaunchArgument("headless", default_value="true"),
             DeclareLaunchArgument("use_sim_time", default_value="true"),
             OpaqueFunction(function=_setup),
