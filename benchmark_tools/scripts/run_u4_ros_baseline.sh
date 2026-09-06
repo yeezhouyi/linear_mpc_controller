@@ -5,16 +5,17 @@
 # is delegated to the offline replayer on the same tracks (ref_core
 # baseline); this pass establishes the ROS-layer completion matrix.
 set -o pipefail
-MPC=/home/zhouyi/ros2_ws/src/linear_mpc_controller
-OUT=/home/zhouyi/ros2_ws/src/linear_mpc_controller/results/mpc_baseline_ros
+MPC=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
+OUT="$MPC/results/mpc_baseline_ros"
 mkdir -p "$OUT"
 
 source /opt/ros/jazzy/setup.bash
 cd "$MPC"
-source ~/build_lmpc/install/setup.bash 2>/dev/null || source ~/install_lmpc/setup.bash
+_INSTALL=$(dirname "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")")/../../install_lmpc
+source "$(readlink -f "$_INSTALL")/install/setup.bash" 2>/dev/null || source ~/install_lmpc/setup.bash
 export TURTLEBOT3_MODEL=waffle
 export ROS_DOMAIN_ID=88
-export FASTRTPS_DEFAULT_PROFILES_FILE=/home/zhouyi/ros2_tunnel_explorer/install/tunnel_explorer_bringup/share/tunnel_explorer_bringup/config/fastdds_udp_only.xml
+export FASTRTPS_DEFAULT_PROFILES_FILE=${EXP_PROFILE:-/home/zhouyi/ros2_tunnel_explorer/install/tunnel_explorer_bringup/share/tunnel_explorer_bringup/config/fastdds_udp_only.xml}
 
 pkill -9 -f "gz [s]im" 2>/dev/null; pkill -9 -f "linear_mpc_[n]ode" 2>/dev/null
 pkill -9 -f "trajectory_[s]erver" 2>/dev/null; pkill -9 -f "velocity_[a]rbiter" 2>/dev/null
@@ -60,7 +61,7 @@ python3 - << 'PYEOF'
 import json
 import re
 from pathlib import Path
-out = Path("/home/zhouyi/ros2_ws/src/linear_mpc_controller/results/mpc_baseline_ros")
+out = Path(__file__).resolve().parents[2] / "results" / "mpc_baseline_ros"
 rows = []
 for cell in sorted(out.iterdir()):
     if not cell.is_dir():
