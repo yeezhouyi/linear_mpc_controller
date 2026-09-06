@@ -72,13 +72,18 @@ def main():
     ap.add_argument("--output", required=True)
     ap.add_argument("--v-max", type=float, default=1.5)
     ap.add_argument("--timeout-s", type=float, default=600.0)
+    ap.add_argument("--qp-max-iter", type=int, default=500,
+                    help="offline evaluation needs convergence, not the "
+                         "1500-iter precision cap; noisy recorded paths "
+                         "make the ADMM hit the cap (~0.3 s/step at 1500)")
     args = ap.parse_args()
 
     rec = json.loads(Path(args.recorded).read_text())
     poses = rec["poses"]
     traj = build_trajectory(poses)
 
-    controller = LinearMpcController(MpcParams(N=25), traj)
+    controller = LinearMpcController(
+        MpcParams(N=25, qp_max_iter=args.qp_max_iter), traj)
     controller.set_reference(traj)
     x0, y0 = float(poses[0][0]), float(poses[0][1])
     yaw0 = float(poses[0][2]) if len(poses[0]) > 2 else 0.0
