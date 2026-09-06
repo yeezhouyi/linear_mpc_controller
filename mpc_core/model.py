@@ -208,9 +208,15 @@ class DifferentialDrivePlant:
     def step(self, v_cmd: float, omega_cmd: float, Ts: float) -> KinematicState:
         st = self.state
         if self.lag_s > 1e-12:
-            tau = self.lag_s
-            v = st.v + (Ts / tau) * (v_cmd - st.v)
-            omega = st.omega + (Ts / tau) * (omega_cmd - st.omega)
+            # Exact discrete-time update of the first-order lag (ZOH):
+            #   v[k+1] = v_cmd + (v[k] - v_cmd) * exp(-Ts / tau).
+            # The previous explicit-Euler form v += (Ts/tau)(cmd - v) is
+            # UNSTABLE for tau < Ts/2 (gain > 2) -- the sampled lag range
+            # [0, 0.045] s overlaps that band and made episodes diverge
+            # (v ~ -30 -> 770 within two steps at seed 100).
+            decay = float(np.exp(-Ts / self.lag_s))
+            v = float(v_cmd) + (st.v - float(v_cmd)) * decay
+            omega = float(omega_cmd) + (st.omega - float(omega_cmd)) * decay
         else:
             v, omega = float(v_cmd), float(omega_cmd)
         yaw = wrap_angle(st.yaw + omega * Ts)
