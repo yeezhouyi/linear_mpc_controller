@@ -81,3 +81,17 @@ ros2/ launch/ config/ worlds/ maps/   ROS2 骨架
 docs/                baseline_audit / mpc_model_derivation / ros2_interface_contract
 results/             参考核心基线归档
 ```
+
+## 4060 门禁与增量结果(2026-09-04~06,全部本机生成)
+
+| 门禁/研究 | 结果 | 证据 |
+|---|---|---|
+| A3 QP 门禁(OSQP=ON) | 真实 QP cycle kSolved,50 iter/425μs | `test_qp_cycle` + ctest(707ce2a) |
+| A1 黄金对拍 | OsqpSolver ↔ Python AdmmQp 同题互验,max\|dx\| 与目标函数 1e-4 相对一致 | `test_qp_golden` + `test/golden_qp_vectors.txt`(98aace4) |
+| A4 位移门禁 | Gazebo 闭环真实运动,位移 3.916m > 0.05m | `artifacts/motion_check/`(0fe3939) |
+| A3 归因表 | plant ZOH 修复后,纯 MPC 全随机化包络 24/24 格 4/4 完成,RMS ≤ 0.029m;离线 vs RL 环境落差=plant 发散 bug(已修 49464b3) | `results/attribution_study/`(fa51b07) |
+| A4/C5 系统辨识 | τ=0.04s 恢复误差 3.9%(VAF 0.99);τ<采样分辨率如实记录不可辨;lookahead 接线诚实负结果(补偿量=噪声级) | `results/sysid_study/`(67f5def) |
+| B4 桥(回放侧) | 录制 JSON → 参考轨迹补全 → 纯 MPC 离线跟踪:直段+90°弧 252 步完成,e_y_rms 0.004m | `benchmark_tools/scripts/replay_path_mpc.py`(fa51b07) |
+| PPO v2 | 重训于修复后环境(1M 步,4 轨迹课程);判定见 `results/eval_residual_c8_iter2/` | 训练中→收口 |
+
+分层声明:以上全部为 WSL2/Gazebo 仿真结果,不含真实硬件声明。
