@@ -13,6 +13,8 @@ source /opt/ros/jazzy/setup.bash
 cd "$MPC"
 source ~/build_lmpc/install/setup.bash 2>/dev/null || source ~/install_lmpc/setup.bash
 export TURTLEBOT3_MODEL=waffle
+export ROS_DOMAIN_ID=88
+export FASTRTPS_DEFAULT_PROFILES_FILE=/home/zhouyi/ros2_tunnel_explorer/install/tunnel_explorer_bringup/share/tunnel_explorer_bringup/config/fastdds_udp_only.xml
 
 pkill -9 -f "gz [s]im" 2>/dev/null; pkill -9 -f "linear_mpc_[n]ode" 2>/dev/null
 pkill -9 -f "trajectory_[s]erver" 2>/dev/null; pkill -9 -f "velocity_[a]rbiter" 2>/dev/null
@@ -37,7 +39,7 @@ for track in straight circle s_curve u_turn; do
     ros2 daemon stop >/dev/null 2>&1
     rm -f /dev/shm/fastrtps_* /dev/shm/fast_datasharing* 2>/dev/null
 
-    setsid nohup ros2 launch linear_mpc_controller tracking_sim.launch.py \
+    setsid nohup ros2 launch linear_mpc_controller tracking_gz.launch.py \
       track:="$track" headless:=true use_sim_time:=true \
       > "$cell/launch.log" 2>&1 < /dev/null &
     sleep 80
