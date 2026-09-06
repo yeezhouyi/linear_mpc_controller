@@ -89,6 +89,8 @@ results/             参考核心基线归档
 | A3 QP 门禁(OSQP=ON) | 真实 QP cycle kSolved,50 iter/425μs | `test_qp_cycle` + ctest(707ce2a) |
 | A1 黄金对拍 | OsqpSolver ↔ Python AdmmQp 同题互验,max\|dx\| 与目标函数 1e-4 相对一致 | `test_qp_golden` + `test/golden_qp_vectors.txt`(98aace4) |
 | A4 位移门禁 | Gazebo 闭环真实运动,位移 3.916m > 0.05m | `artifacts/motion_check/`(0fe3939) |
+| U4 ROS 20-cell 基线 | **20/20 motion PASS**,位移 1.8-5.4m(4 轨迹 × 5 种子) | `results/mpc_baseline_ros/`(e11f889) |
+| 残差 RL postmortem | 三轮受控迭代复盘,冻结决策+复活条件 | `docs/residual_rl_postmortem.md`(33edd98) |
 | A3 归因表 | plant ZOH 修复后,纯 MPC 全随机化包络 24/24 格 4/4 完成,RMS ≤ 0.029m;离线 vs RL 环境落差=plant 发散 bug(已修 49464b3) | `results/attribution_study/`(fa51b07) |
 | A4/C5 系统辨识 | τ=0.04s 恢复误差 3.9%(VAF 0.99);τ<采样分辨率如实记录不可辨;lookahead 接线诚实负结果(补偿量=噪声级) | `results/sysid_study/`(67f5def) |
 | B4 桥(回放侧) | 录制 JSON → 参考轨迹补全 → 纯 MPC 离线跟踪:直段+90°弧 252 步完成,e_y_rms 0.004m | `benchmark_tools/scripts/replay_path_mpc.py`(fa51b07) |
