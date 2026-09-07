@@ -12,6 +12,7 @@ Sign conventions (frozen, see docs/mpc_model_derivation.md):
 """
 from __future__ import annotations
 
+import math
 from typing import Optional, Tuple
 
 import numpy as np
@@ -117,7 +118,29 @@ def closest_point(
         d = dist2[idx]
         best = float(d.min())
         thr = (np.sqrt(best) + tie_eps_m) ** 2
-        near = idx[d <= thr]
+        m = d <= thr
+        near = idx[m]
+        if near.size > 1:
+            # RECORDED DEVIATION (交接文档 R5/R6): on dense (0.02 m) sampling
+            # the eps band always contains the same-lane micro-segments around
+            # the foot (their clamped feet lie within tie_eps of the best
+            # distance), so the raw doc tie logic keeps picking the candidate
+            # nearest s_prev -- an arc lag that never clears.  Candidates on
+            # the SAME lane (tangent within 0.05 rad) collapse to the single
+            # best one; only genuinely different-lane ties (antiparallel or
+            # neighbouring lanes) reach the s_prev / stage-3 path.
+            sy = np.arctan2(ty, tx)
+            j = int(np.argmin(d[m]))
+            dpsi = np.abs((sy[near] - sy[near[j]] + math.pi) % (2.0 * math.pi) - math.pi)
+            cross = near[dpsi > 0.05]
+            if cross.size == 0:
+                return int(near[j])
+            # collapse the same-lane cluster to its single best, KEEP the
+            # genuinely other-lane candidates for the tie logic (a seam/loop
+            # start-end or an antiparallel lane must not override the closer
+            # same-lane foot just because it is the only cross candidate).
+            near = np.concatenate(([near[j]], cross))
+            d = dist2[near]
         if near.size > 1 and s_prev is not None:
             arcs = traj.s[near] + along_c[near]
             return int(near[int(np.argmin(np.abs(arcs - float(s_prev))))])
@@ -213,6 +236,30 @@ def frenet_state_staged(
     e_psi = wrap_angle(state.yaw - anchor.yaw)
     err = np.array([e_y, e_psi, state.v, state.omega], dtype=float)
     return anchor, err, stage, float(arc)
+
+
+
+def frenet_error_at_arc(
+    traj: Trajectory,
+    state: KinematicState,
+    arc: float,
+    lookahead_m: float = 0.0,
+) -> Tuple[TrackPoint, np.ndarray]:
+    """A3.1: anchor + error state taken at an ACCEPTED arc (never raw).
+
+    e_y is recomputed in the tangent frame of ``arc``; a rejected cycle must
+    not feed the QP an error measured against the rejected candidate's
+    segment.  Returns ``(anchor, err)`` with ``err = [e_y, e_psi, v, omega]``.
+    """
+    a = min(arc + lookahead_m, traj.s[-1]) if lookahead_m > 0.0 else float(arc)
+    a = min(max(a, 0.0), traj.s[-1])
+    anchor = traj.sample_by_s(a)
+    ny_, nx_ = -math.sin(anchor.yaw), math.cos(anchor.yaw)
+    # left-normal frame at the accepted arc: e_y = rel . (-sin, cos)
+    e_y = (state.x - anchor.x) * (-math.sin(anchor.yaw)) + (state.y - anchor.y) * math.cos(anchor.yaw)
+    e_psi = wrap_angle(state.yaw - anchor.yaw)
+    err = np.array([e_y, e_psi, state.v, state.omega], dtype=float)
+    return anchor, err
 
 
 

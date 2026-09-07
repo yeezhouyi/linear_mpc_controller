@@ -230,6 +230,19 @@ class MpcParams:
     # compensation belongs to the system-identification stage (C5), where
     # the ROS2 layer may raise it to ~v*latency.
     lookahead_m: float = 0.0
+    # ---- A5.1 acceptance gate (declared parameters; Python copies
+    # kept numerically identical to mpc_core/progress_gate constants
+    # and to the C++ controller, see A7.3/test gate guards) ---------
+    projection_margin_m: float = 0.02    # measurement-noise floor/cycle
+    allowance_cap_m: float = 0.30        # max banked budget (== fwd_m)
+    odom_step_noise_m: float = 0.015     # per-step odom noise in step cap
+    back_m: float = 0.08                 # backward-jump rejection band
+    max_reject_run: int = 5              # consecutive rejects -> reacquire
+    # ---- A4.2 reacquire protocol ------------------------------------
+    v_probation: float = 0.15            # speed cap during probation
+    probation_steps: int = 20            # observation window after commit
+    reacquire_stable_steps: int = 3      # consecutive same-seg to commit
+    reacquire_timeout_steps: int = 40    # seeking timeout -> PROJECTION_LOST
     # Solver
     qp_max_iter: int = 1500
     qp_abs_tol: float = 1e-6
@@ -247,7 +260,7 @@ class MpcParams:
             f"Ts={self.Ts:.10g};N={self.N};Q={self.Q_diag};QF={self.Q_F_diag};"
             f"S={self.S_diag};v=[{self.v_min:.10g},{self.v_max:.10g}];"
             f"om={self.omega_max:.10g};a={self.a_max:.10g};al={self.alpha_max:.10g};"
-            f"lk={self.lookahead_m:.10g};solver=admm/{self.qp_max_iter}/"
+            f"lk={self.lookahead_m:.10g};gate=[{self.projection_margin_m:.6g},{self.allowance_cap_m:.6g},{self.odom_step_noise_m:.6g},{self.back_m:.6g},{self.max_reject_run}];prob=[{self.v_probation:.6g},{self.probation_steps},{self.reacquire_stable_steps},{self.reacquire_timeout_steps}];solver=admm/{self.qp_max_iter}/"
             f"{self.qp_abs_tol:.3g}/{self.qp_rel_tol:.3g}"
         )
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
@@ -269,6 +282,9 @@ class MpcDiagnostics:
     fallback_stage: int = 0        # 0 none, 1 degrade speed, 2 zero/hold, 3 emergency
     cmd_vel: tuple = (0.0, 0.0)    # final (v_cmd, omega_cmd)
     e_ref: tuple = (0.0, 0.0, 0.0, 0.0)  # error state used this cycle
+    accepted_arc: float = 0.0       # A5.1 baseline after this cycle (fwd-only)
+    in_probation: bool = False      # A4.2 probation active (completion refused)
+    reacquire_count: int = 0        # A4.2 reacquire episodes entered
 
 
 @dataclasses.dataclass

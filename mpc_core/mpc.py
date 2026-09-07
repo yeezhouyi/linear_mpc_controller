@@ -17,13 +17,14 @@ through :class:`FallbackPolicy`.
 """
 from __future__ import annotations
 
+import math
 import time
 from typing import List, Optional
 
 import numpy as np
 
 from mpc_core.fallback import FallbackPolicy
-from mpc_core.frenet import frenet_state_staged
+from mpc_core.frenet import closest_point, frenet_error_at_arc
 from mpc_core.model import build_ltv_window, reference_state_vector
 from mpc_core.qp import AdmmQp
 from mpc_core.types import (
@@ -60,9 +61,21 @@ class LinearMpcController:
         )
         self._warm: Optional[np.ndarray] = None
         self.cycle = 0
-        # A2/A3: last ACCEPTED raw projection arc (window centre).
-        # Reset with the reference; frozen on stage==3 cycles.
-        self._s_prev: Optional[float] = None
+        # ---- A5.1 acceptance-gate state (single gate, in chain) ----
+        # baseline: last ACCEPTED arc (window centre + delta_s baseline),
+        # forward-only; budget: banked PHYSICAL displacement; reject_run:
+        # consecutive rejections -> A4.2 reacquire.
+        self._baseline: Optional[float] = None
+        self._last_xy: Optional[Tuple[float, float]] = None
+        self._budget: float = 0.0
+        self._reject_run: int = 0
+        # ---- A4.2 reacquire protocol state --------------------------
+        self._reacquire_mode = "NORMAL"  # NORMAL | SEEKING | PROBATION
+        self._seeking_steps: int = 0
+        self._stable_run: int = 0
+        self._stable_seg: int = -1
+        self._probation_left: int = 0
+        self._reacquire_events: int = 0
 
     # -- public API ---------------------------------------------------------
 
@@ -70,7 +83,15 @@ class LinearMpcController:
         self.traj = traj
         self.fallback.reset()
         self._warm = None
-        self._s_prev = None
+        self._baseline = None
+        self._last_xy = None
+        self._budget = 0.0
+        self._reject_run = 0
+        self._reacquire_mode = "NORMAL"
+        self._seeking_steps = 0
+        self._stable_run = 0
+        self._stable_seg = -1
+        self._probation_left = 0
 
     def compute_cycle(self, state: KinematicState) -> MpcOutput:
         """One controller cycle at period ``Ts``. Pure core: no ROS time/TF
@@ -87,24 +108,106 @@ class LinearMpcController:
             diag.fallback_stage = 3
             return out
 
-        anchor, err, stage, arc = frenet_state_staged(
-            self.traj, state, self.params.lookahead_m,
-            yaw=state.yaw, s_prev=self._s_prev,
-        )
-        diag.e_ref = tuple(float(e) for e in err)
+        p = self.params
+        # ---- A4.2 reacquire seeking: no QP while we re-anchor -------
+        if self._reacquire_mode == "SEEKING":
+            self._seeking_steps += 1
+            if self._seeking_steps > p.reacquire_timeout_steps:
+                diag.health = HealthState.EMERGENCY_STOP
+                diag.reason = "PROJECTION_LOST"
+                diag.fallback_used = True
+                diag.fallback_stage = 3
+                diag.in_probation = True
+                return out
+            seg, _, _, cand_arc, cand_stage = closest_point(
+                self.traj, state.x, state.y, yaw=state.yaw)
+            if cand_stage == 3:
+                self._stable_run = 0
+                self._stable_seg = -1
+            else:
+                if seg == self._stable_seg:
+                    self._stable_run += 1
+                else:
+                    self._stable_run, self._stable_seg = 1, seg
+                if self._stable_run >= p.reacquire_stable_steps:
+                    # atomic commit (A4.2 step 4/5): new baseline,
+                    # zero budget, drop QP warm start, then probation.
+                    self._baseline = float(cand_arc)
+                    self._budget = 0.0
+                    self._reject_run = 0
+                    self._last_xy = (float(state.x), float(state.y))
+                    self._warm = None
+                    self._reacquire_mode = "PROBATION"
+                    self._probation_left = p.probation_steps
+                    self._reacquire_events += 1
+            diag.health = HealthState.OK
+            diag.reason = "REACQUIRE_SEEKING"
+            diag.reacquire_count = self._reacquire_events
+            diag.accepted_arc = float(self._baseline or 0.0)
+            return out  # decel-to-zero: zero command while seeking
+        # ---- raw projection for the gate (window centred on baseline)
+        seg, _, _, arc, stage = closest_point(
+            self.traj, state.x, state.y, yaw=state.yaw,
+            s_prev=self._baseline)
         if stage == 3:
             # A2: heading gate rejected every candidate / projection
             # ambiguous.  NO unconstrained global fallback -- that was
             # the original fail-open defect.  Stop BEFORE any QP input
-            # is built (A3.2); s_prev stays frozen.
+            # is built (A3.2); baseline stays frozen.
             diag.health = HealthState.EMERGENCY_STOP
             diag.reason = "PROJECTION_AMBIGUOUS"
             diag.fallback_used = True
             diag.fallback_stage = 3
             return out
-        # pre-gate acceptance: every non-stage-3 raw projection updates
-        # s_prev (the A5.1 acceptance gate replaces this next unit).
-        self._s_prev = arc
+        # ---- A5.1 acceptance gate (unique state machine) -------------
+        if self._baseline is None:
+            # anchor cycle: nothing to compare against; accept the first
+            # trustworthy projection (module semantics: first step banks
+            # nothing and judges against the bare margin).
+            self._baseline = float(arc)
+            self._reject_run = 0
+        else:
+            prev = self._baseline
+            # 1) bank PHYSICAL displacement along the tangent at the last
+            #    ACCEPTED arc (never the raw candidate's tangent).
+            if self._last_xy is None:
+                physical_ds = 0.0
+            else:
+                dx = float(state.x) - self._last_xy[0]
+                dy = float(state.y) - self._last_xy[1]
+                tan_pt = self.traj.sample_by_s(prev)
+                projected = dx * math.cos(tan_pt.yaw) + dy * math.sin(tan_pt.yaw)
+                step_cap = p.v_max * p.Ts + p.odom_step_noise_m
+                physical_ds = min(max(0.0, projected), step_cap)
+            self._budget = min(self._budget + physical_ds, p.allowance_cap_m)
+            delta_s = float(arc) - prev
+            limit = p.projection_margin_m + self._budget
+            if delta_s < -p.back_m:
+                self._reject_run += 1          # backward-lane jump
+            elif delta_s <= limit:
+                self._budget = 0.0              # spent on accept
+                self._reject_run = 0
+                if arc > prev:
+                    self._baseline = float(arc)  # forward-only
+            else:
+                self._reject_run += 1          # forward jump over limit
+            if self._reject_run > p.max_reject_run:
+                # A4.2: stop trusting the stale anchor; decel and seek.
+                self._reacquire_mode = "SEEKING"
+                self._seeking_steps = 0
+                self._stable_run = 0
+                self._stable_seg = -1
+        self._last_xy = (float(state.x), float(state.y))
+        # ---- anchor/err at the ACCEPTED arc (A5.0/A3.1) --------------
+        anchor, err = frenet_error_at_arc(
+            self.traj, state, self._baseline, p.lookahead_m)
+        diag.e_ref = tuple(float(e) for e in err)
+        diag.accepted_arc = float(self._baseline or 0.0)
+        diag.reacquire_count = self._reacquire_events
+        if self._reacquire_mode == "PROBATION":
+            self._probation_left -= 1
+            if self._probation_left <= 0:
+                self._reacquire_mode = "NORMAL"
 
         # ---- build prediction window -----------------------------------
         As, Bs, anchors = build_ltv_window(
@@ -138,6 +241,10 @@ class LinearMpcController:
             diag.constraint_violation = self._max_violation(x0, As, Bs, anchors, U)
             if res.status == "APPROXIMATE":
                 diag.reason = "approximate QP solve"
+            # A4.2 probation / reject-run speed limit (A5.0)
+            if self._reacquire_mode == "PROBATION" or self._reject_run > 0:
+                v_cmd = min(v_cmd, p.v_probation)
+            diag.in_probation = self._reacquire_mode == "PROBATION"
             v_safe, w_safe = self.fallback.apply((v_cmd, w_cmd), HealthState.OK, diag)
             # keep the degraded health if the fallback changed anything
             if diag.health != HealthState.OK:
