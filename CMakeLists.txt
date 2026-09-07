@@ -38,6 +38,7 @@ if(LINEAR_MPC_WITH_OSQP)
   target_link_libraries(linear_mpc_core PUBLIC osqp::osqp)
 endif()
 
+find_package(Python3 COMPONENTS Interpreter)
 if(BUILD_TESTING)
   enable_testing()
   add_executable(test_linear_mpc_core test/test_core.cpp)
@@ -45,6 +46,9 @@ if(BUILD_TESTING)
   add_test(NAME core COMMAND test_linear_mpc_core)
   add_executable(test_projection_gate test/test_projection_gate.cpp)
   add_executable(projection_parity_dump tools/projection_parity_dump.cpp)
+  add_test(NAME projection_parity
+    COMMAND ${Python3_EXECUTABLE}
+      ${CMAKE_CURRENT_SOURCE_DIR}/benchmark_tools/scripts/projection_parity.py)
   target_link_libraries(projection_parity_dump PRIVATE linear_mpc_core)
   add_executable(test_controller_gate test/test_controller_gate.cpp)
   target_link_libraries(test_controller_gate PRIVATE linear_mpc_core)
