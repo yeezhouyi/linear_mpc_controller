@@ -17,6 +17,7 @@ from typing import Optional
 import numpy as np
 
 from mpc_core.frenet import closest_point
+from mpc_core.progress_gate import ProgressAllowanceGate
 from mpc_core.model import DifferentialDrivePlant
 from mpc_core.mpc import LinearMpcController
 from mpc_core.types import HealthState, KinematicState, MpcParams, Trajectory, wrap_angle
@@ -92,6 +93,14 @@ class ResidualTrackingEnv:
         self._arc_hist = []
         self._delay_buf = []
         self.projection_trigger_count = 0
+        # A7.3: termination/progress ledger routes through the shared gate;
+        # seed + prime with the initial pose (first step() only anchors).
+        st0 = self.plant.state
+        _, _, _, seed_arc, _ = closest_point(self.traj, st0.x, st0.y)
+        self._gate = ProgressAllowanceGate(
+            v_max=self.mpc_params.v_max, Ts=self.mpc_params.Ts,
+            accepted_arc=float(seed_arc))
+        self._gate.step(self.traj, st0.x, st0.y, float(seed_arc))
         self._obs = self._observe()
         return self._obs.copy(), {}
 
@@ -131,12 +140,16 @@ class ResidualTrackingEnv:
         e_psi = wrap_angle(st.yaw - anchor.yaw)
         err = np.array([e_y, e_psi, st.v, st.omega])
         du_norm2 = float(np.sum((cmd - self._prev_cmd) ** 2))
-        ds = max(0.0, arc - (self._arc_hist[-1] if self._arc_hist else 0.0))
-        self._arc_hist.append(arc)
+        # A5.2/A10: progress, stall and completion read the ACCEPTED arc
+        # (ledger gate), never the raw projection.
+        dec = self._gate.step(self.traj, st.x, st.y, arc)
+        acc_arc = float(self._gate.accepted_arc)
+        ds = max(0.0, acc_arc - (self._arc_hist[-1] if self._arc_hist else 0.0))
+        self._arc_hist.append(acc_arc)
         stalled = st.v < self.reward_w.stall_threshold_v and self.step_count > 20
 
         terminated, reason = check_termination(
-            self.term_cfg, self.step_count, arc, self._arc_hist, e_y,
+            self.term_cfg, self.step_count, acc_arc, self._arc_hist, e_y,
             self.traj.total_length, out.diag.health,
         )
         # measure noise is applied on the *observed* state only (next obs)

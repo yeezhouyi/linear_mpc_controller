@@ -24,6 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 import numpy as np
 
 from mpc_core.frenet import closest_point
+from mpc_core.progress_gate import ProgressAllowanceGate
 from mpc_core.model import DifferentialDrivePlant
 from mpc_core.mpc import LinearMpcController
 from mpc_core.types import KinematicState, MpcParams, Trajectory, wrap_angle
@@ -93,11 +94,32 @@ def main():
     e_y, e_psi, dv = [], [], []
     prev_cmd = np.zeros(2)
     reached = False
+    raw_arc_final = 0.0
+    acc_arc_final = 0.0
+    high_watermark = 0.0
+    jump_episodes = 0
+    # A7.3: the replay ledger routes through the shared gate; completion and
+    # progress read the ACCEPTED arc, never the raw projection.
+    st0 = plant.state
+    _, _, _, seed_arc, _ = closest_point(traj, st0.x, st0.y)
+    gate = ProgressAllowanceGate(v_max=args.v_max, Ts=Ts,
+                                 accepted_arc=float(seed_arc))
+    gate.step(traj, st0.x, st0.y, float(seed_arc))  # prime (first call anchors)
+    in_jump = False
     steps = int(args.timeout_s / Ts)
     for _ in range(steps):
         st = plant.state
         _, _, e, arc, _ = closest_point(traj, st.x, st.y)
-        if arc >= traj.total_length - 0.10:
+        raw_arc_final = float(arc)
+        dec = gate.step(traj, st.x, st.y, arc)
+        if not dec.accepted and not in_jump:
+            in_jump = True
+            jump_episodes += 1
+        elif dec.accepted:
+            in_jump = False
+        acc_arc_final = float(gate.accepted_arc)
+        high_watermark = max(high_watermark, acc_arc_final)
+        if acc_arc_final >= traj.total_length - 0.10:
             reached = True
             break
         anchor = traj.sample_by_s(arc)
@@ -113,10 +135,17 @@ def main():
         prev_cmd = np.array([cmd_v, cmd_w])
 
     e_y_arr = np.array(e_y) if e_y else np.array([0.0])
+    path_len = float(traj.total_length)
     metrics = {
-        "path_length_m": round(float(traj.total_length), 3),
+        "path_length_m": round(path_len, 3),
         "recorded_poses": len(poses),
         "completed": bool(reached),
+        # A5.4 accepted-arc exports (raw vs accepted delta = projection lies)
+        "raw_arc_final": round(raw_arc_final, 4),
+        "accepted_arc_final": round(acc_arc_final, 4),
+        "arc_high_watermark": round(high_watermark, 4),
+        "progress_ratio": round(min(high_watermark / path_len, 1.0), 4) if path_len > 1e-9 else 0.0,
+        "projection_jump_count": jump_episodes,
         "steps": len(e_y),
         "e_y_rms": round(float(np.sqrt(np.mean(e_y_arr ** 2))), 4),
         "e_y_p95": round(float(np.percentile(e_y_arr, 95)), 4),
