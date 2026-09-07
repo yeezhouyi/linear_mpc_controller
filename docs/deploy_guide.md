@@ -25,7 +25,7 @@ bash scripts/ppo_v2_status.sh   # RL 依赖 + 产物 + 判定检查
 - 评估（未见 seeds 100–102 × 4 轨迹 × 三控制器）：
 ```bash
 /home/zhouyi/mc_venv/bin/python3 mpc_rl_env/algorithms/evaluate_policy.py \
-    --checkpoint outputs/ppo_residual/checkpoint.zip \
+    --checkpoint results/eval_residual_c8_iter2/train_seed_0/checkpoint.zip \
     --tracks straight,circle,s_curve,u_turn --seeds 100,101,102
 ```
 - 提示：任何新的残差实验前先确认"纯 MPC 在该难度包络内存在系统性误差"（A3 归因表），否则残差无学习空间；未达到 C4 准入门槛时保持 `use_residual_policy: false`。
@@ -39,5 +39,5 @@ bash scripts/sync_wsl_windows.sh all   # git push main + 镜像交接件到 Wind
 
 ## 结果落盘约定
 - `results/`：每次运行一个子目录（VERDICT.md + eval 明细 + train log），全部 git 跟踪；
-- `outputs/ppo_residual/`：可复现 checkpoint + run_config（git 跟踪）；
+- `outputs/ppo_residual/`：本地便利副本（.gitignore 忽略）；权威可复现 checkpoint + run_config 在 `results/eval_residual_c8_iter2/train_seed_0/`（git 跟踪）；
 - `交接文档.md`（Windows 项目根）：跨执行线单一事实源，逐轮 R 日志回写。
