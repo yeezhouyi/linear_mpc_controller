@@ -126,7 +126,7 @@ class ResidualTrackingEnv:
 
         # 4) metrics & termination
         st = self.plant.state
-        _, _, e_y, arc = closest_point(self.traj, st.x, st.y)
+        _, _, e_y, arc, _ = closest_point(self.traj, st.x, st.y)
         anchor = self.traj.sample_by_s(arc)
         e_psi = wrap_angle(st.yaw - anchor.yaw)
         err = np.array([e_y, e_psi, st.v, st.omega])
@@ -162,12 +162,12 @@ class ResidualTrackingEnv:
         if self.profile.measure_noise_m > 0 and self.step_count > 0:
             nx = st.x + self.profile.rng.normal(0.0, self.profile.measure_noise_m)
             ny = st.y + self.profile.rng.normal(0.0, self.profile.measure_noise_m)
-            _, _, e_y, arc = closest_point(self.traj, nx, ny)
+            _, _, e_y, arc, _ = closest_point(self.traj, nx, ny)
             anchor = self.traj.sample_by_s(arc)
             e_psi = wrap_angle(st.yaw - anchor.yaw)
             err = np.array([e_y, e_psi, st.v, st.omega])
         else:
-            _, _, e_y, arc = closest_point(self.traj, st.x, st.y)
+            _, _, e_y, arc, _ = closest_point(self.traj, st.x, st.y)
             anchor = self.traj.sample_by_s(arc)
             e_psi = wrap_angle(st.yaw - anchor.yaw)
             err = np.array([e_y, e_psi, st.v, st.omega])

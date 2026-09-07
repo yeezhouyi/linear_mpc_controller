@@ -84,8 +84,8 @@ def test_closest_point_deterministic_with_duplicates():
         kappa=np.zeros(5),
         v=np.full(5, 0.8),
     )
-    seg, w, e_y, arc = closest_point(tr, 1.4, 0.05)
+    seg, w, e_y, arc, _ = closest_point(tr, 1.4, 0.05)
     assert e_y == pytest.approx(0.05, abs=1e-9)
     assert arc == pytest.approx(1.4, abs=1e-6)
     # run twice, same answer
-    assert (seg, w, e_y, arc) == closest_point(tr, 1.4, 0.05)
+    assert (seg, w, e_y, arc) == closest_point(tr, 1.4, 0.05)[:4]

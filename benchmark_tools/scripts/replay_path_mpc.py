@@ -96,7 +96,7 @@ def main():
     steps = int(args.timeout_s / Ts)
     for _ in range(steps):
         st = plant.state
-        _, _, e, arc = closest_point(traj, st.x, st.y)
+        _, _, e, arc, _ = closest_point(traj, st.x, st.y)
         if arc >= traj.total_length - 0.10:
             reached = True
             break

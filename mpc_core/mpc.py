@@ -23,7 +23,7 @@ from typing import List, Optional
 import numpy as np
 
 from mpc_core.fallback import FallbackPolicy
-from mpc_core.frenet import frenet_state
+from mpc_core.frenet import frenet_state_staged
 from mpc_core.model import build_ltv_window, reference_state_vector
 from mpc_core.qp import AdmmQp
 from mpc_core.types import (
@@ -60,6 +60,9 @@ class LinearMpcController:
         )
         self._warm: Optional[np.ndarray] = None
         self.cycle = 0
+        # A2/A3: last ACCEPTED raw projection arc (window centre).
+        # Reset with the reference; frozen on stage==3 cycles.
+        self._s_prev: Optional[float] = None
 
     # -- public API ---------------------------------------------------------
 
@@ -67,6 +70,7 @@ class LinearMpcController:
         self.traj = traj
         self.fallback.reset()
         self._warm = None
+        self._s_prev = None
 
     def compute_cycle(self, state: KinematicState) -> MpcOutput:
         """One controller cycle at period ``Ts``. Pure core: no ROS time/TF
@@ -83,8 +87,24 @@ class LinearMpcController:
             diag.fallback_stage = 3
             return out
 
-        anchor, err = frenet_state(self.traj, state, self.params.lookahead_m)
+        anchor, err, stage, arc = frenet_state_staged(
+            self.traj, state, self.params.lookahead_m,
+            yaw=state.yaw, s_prev=self._s_prev,
+        )
         diag.e_ref = tuple(float(e) for e in err)
+        if stage == 3:
+            # A2: heading gate rejected every candidate / projection
+            # ambiguous.  NO unconstrained global fallback -- that was
+            # the original fail-open defect.  Stop BEFORE any QP input
+            # is built (A3.2); s_prev stays frozen.
+            diag.health = HealthState.EMERGENCY_STOP
+            diag.reason = "PROJECTION_AMBIGUOUS"
+            diag.fallback_used = True
+            diag.fallback_stage = 3
+            return out
+        # pre-gate acceptance: every non-stage-3 raw projection updates
+        # s_prev (the A5.1 acceptance gate replaces this next unit).
+        self._s_prev = arc
 
         # ---- build prediction window -----------------------------------
         As, Bs, anchors = build_ltv_window(

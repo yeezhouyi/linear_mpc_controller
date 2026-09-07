@@ -117,11 +117,25 @@ class Trajectory:
     kappa: np.ndarray
     v: np.ndarray
     kind: TrackPointKind = TrackPointKind.WITH_VELOCITY_CURVATURE
+    segment_gear: Optional[np.ndarray] = None  # (n-1,) strict +1/-1 per segment (A2.2)
 
     def __post_init__(self) -> None:
         n = len(self.s)
         assert n == len(self.x) == len(self.y) == len(self.yaw) == len(self.kappa) == len(self.v)
         assert n >= 2, "trajectory needs at least two points"
+        # A2.2: travel direction is an EXPLICIT per-segment field (+1/-1),
+        # never inferred from sign(traj.v): at a cusp the reference speed is
+        # exactly 0 and the sign is meaningless.  Pure-forward trajectories
+        # default to all +1 -- bit-identical to the pre-A2 search.
+        if self.segment_gear is None:
+            self.segment_gear = np.ones(n - 1, dtype=float)
+        else:
+            sg = np.asarray(self.segment_gear, dtype=float)
+            assert sg.shape == (n - 1,), (
+                f"segment_gear must be shape ({n - 1},) per segment, got {sg.shape}"
+            )
+            assert np.all(np.isin(sg, (1.0, -1.0))), "segment_gear entries must be strictly +1 or -1"
+            self.segment_gear = sg
         self._n = n
         self._closed = False
 

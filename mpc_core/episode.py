@@ -79,7 +79,7 @@ def run_tracking_episode(
         plant.step(out.v_cmd, out.omega_cmd, Ts)
         st = plant.state
 
-        _, _, e_y, arc = closest_point(traj, st.x, st.y)
+        _, _, e_y, arc, _ = closest_point(traj, st.x, st.y)
         e_psi = wrap_angle(st.yaw - traj.sample_by_s(arc).yaw)
         res.e_y.append(e_y)
         res.e_psi.append(e_psi)
