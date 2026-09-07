@@ -129,17 +129,54 @@ def closest_point(
             # the SAME lane (tangent within 0.05 rad) collapse to the single
             # best one; only genuinely different-lane ties (antiparallel or
             # neighbouring lanes) reach the s_prev / stage-3 path.
-            sy = np.arctan2(ty, tx)
             j = int(np.argmin(d[m]))
-            dpsi = np.abs((sy[near] - sy[near[j]] + math.pi) % (2.0 * math.pi) - math.pi)
-            cross = near[dpsi > 0.05]
-            if cross.size == 0:
+            # Same-PLACE collapse first: if every near candidate's foot lies
+            # within 2*tie_eps of the best foot they are the SAME physical
+            # place (a closed path's head/tail seam, both strands arriving at
+            # the same vertex).  Return the best.
+            feet_x = proj_x[near] - proj_x[near[j]]
+            feet_y = proj_y[near] - proj_y[near[j]]
+            if np.all(np.hypot(feet_x, feet_y) <= 2.0 * tie_eps_m):
                 return int(near[j])
-            # collapse the same-lane cluster to its single best, KEEP the
-            # genuinely other-lane candidates for the tie logic (a seam/loop
-            # start-end or an antiparallel lane must not override the closer
-            # same-lane foot just because it is the only cross candidate).
-            near = np.concatenate(([near[j]], cross))
+            # ARC-CONTIGUITY run partition (robust on curved paths: the
+            # admitted band on a circle spans enough arc for the tangent to
+            # rotate >0.05 rad WITHIN one lane, so tangent difference is the
+            # wrong discriminator).  One contiguous run = one lane -> the
+            # argmin best.  Several runs separated by an arc gap = different
+            # places/lanes -> genuine no-s_prev ambiguity below.
+            arcs_n = traj.s[near] + along_c[near]
+            order = np.argsort(arcs_n)
+            sorted_arcs = arcs_n[order]
+            gap = np.diff(sorted_arcs)
+            run_breaks = np.where(gap > max(0.05, 4.0 * (sorted_arcs[-1] - sorted_arcs[0]) / max(near.size - 1, 1)))[0]
+            # simpler: a break is any inter-candidate arc gap > 5x the median
+            # intra-run spacing, floored at 0.05 m
+            med = float(np.median(gap)) if gap.size else 0.0
+            breaks = gap > max(0.05, 5.0 * med)
+            if not np.any(breaks):
+                return int(near[j])
+            # Multiple arc runs.  They are a genuine no-state ambiguity ONLY
+            # when they are DIFFERENT directions (antiparallel / crossing
+            # lanes).  A closed path's seam puts its head and tail runs at
+            # the same place with the SAME travel direction (full-loop start
+            # tangent ~= end tangent): there the deterministic argmin is the
+            # correct anchor/observation answer and matches the doc's
+            # "stateless reproduces the original search".
+            sy = np.arctan2(ty, tx)
+            run_starts = np.concatenate(([0], np.where(breaks)[0] + 1))
+            reps = []
+            rep_angles = []
+            for rs in run_starts:
+                run_idx = near[order[rs:]]
+                b = int(np.argmin(dist2[run_idx]))
+                reps.append(run_idx[b])
+                rep_angles.append(float(sy[run_idx[b]]))
+            dirs = np.asarray(rep_angles)
+            dpsi = np.abs((dirs[:, None] - dirs[None, :] + math.pi)
+                          % (2.0 * math.pi) - math.pi)
+            if np.max(dpsi) <= 0.52:   # ~30 deg: same direction -> argmin
+                return int(near[j])
+            near = np.asarray(reps, dtype=int)
             d = dist2[near]
         if near.size > 1 and s_prev is not None:
             arcs = traj.s[near] + along_c[near]
@@ -161,22 +198,22 @@ def closest_point(
     if seg < 0:
         cand = _pick(np.where(ok)[0])
         if cand == -2:
-            # RECORDED DEVIATION vs doc code: with no s_prev the doc
-            # declares a genuine near-tie ambiguous (stage 3).  On
-            # 0.02 m-sampled paths adjacent micro-segments are ALWAYS
-            # within tie_eps of the best distance, so that fires on every
-            # stateless call and contradicts the doc's own prose ("s_prev
-            # is None reproduces the original stateless global search").
-            # Stateless path stays deterministic (old argmin, stage 2).
-            seg = int(np.argmin(dist2))
-            stage = 2
-        elif cand < 0:
+            # cand == -2 : a genuine CROSS-LANE near-tie with no s_prev to
+            # break it.  (Same-lane micro-segment ties were already collapsed
+            # inside _pick, so this only fires when two DIFFERENT lanes are
+            # within tie_eps of the pose -- e.g. equidistant antiparallel
+            # lanes.)  Ambiguous: refuse and let the caller stop (A2 item 7).
+            # NOTE: the earlier R5 no-s_prev argmin fallback applied to ALL
+            # near-ties; the lane collapse made it unnecessary for same-lane
+            # micro-segments, so it is revoked here -- an arbitrary pick
+            # between two lanes would be a silent coin flip.
+            return -1, 0.0, float("nan"), float(s_prev or 0.0), 3
+        if cand < 0:
             # cand == -1 : the heading gate rejected EVERY segment.
             # No unconstrained fallback: the gate is binding (fail-open
             # closed).  Refuse, and let the caller stop pre-QP.
             return -1, 0.0, float("nan"), float(s_prev or 0.0), 3
-        else:
-            seg, stage = cand, 2
+        seg, stage = cand, 2
     nx_, ny_ = -ty[seg], tx[seg]
     lat = (px - proj_x[seg]) * nx_ + (py - proj_y[seg]) * ny_
     arc = traj.s[seg] + along_c[seg]

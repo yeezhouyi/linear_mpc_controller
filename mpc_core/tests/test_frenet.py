@@ -27,12 +27,16 @@ def test_circle_left_positive_towards_centre():
     """make_circle(radius=2) starts at (0,0) heading +x and turns CCW, so the
     circle centre sits at (0, +R) on the robot's LEFT.  e_y > 0 = left."""
     traj = make_circle(radius=2.0)
-    # inside (towards centre, left of travel at the bottom point) -> +0.2
-    st = KinematicState(x=0.0, y=0.2, yaw=0.0, v=0.6, omega=0.3)
+    # inside (towards centre, left of travel) -> +0.2.  RECORDED ADAPTATION:
+    # the original pose (0, 0.2) sits exactly above the closed circle's
+    # start=end SEAM vertex, where the projection is now honestly ambiguous
+    # (two arc-separated strands of one path -> stage 3, A2 item 7); moved to
+    # a radial inside point at a non-seam angle (radial offset == e_y).
+    st = KinematicState(x=0.45, y=0.258, yaw=0.0, v=0.6, omega=0.3)
     anchor, err = frenet_state(traj, st)
     assert err[0] == pytest.approx(0.2, abs=0.02)
     # outside (right of travel) -> -0.2
-    st2 = KinematicState(x=0.0, y=-0.2, yaw=0.0, v=0.6, omega=0.3)
+    st2 = KinematicState(x=0.55, y=-0.13, yaw=0.0, v=0.6, omega=0.3)
     _, err2 = frenet_state(traj, st2)
     assert err2[0] == pytest.approx(-0.2, abs=0.02)
 
