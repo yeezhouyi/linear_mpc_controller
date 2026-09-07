@@ -145,28 +145,42 @@ class LinearMpcController:
             diag.reacquire_count = self._reacquire_events
             diag.accepted_arc = float(self._baseline or 0.0)
             return out  # decel-to-zero: zero command while seeking
-        # ---- raw projection for the gate (window centred on baseline)
-        seg, _, _, arc, stage = closest_point(
-            self.traj, state.x, state.y, yaw=state.yaw,
-            s_prev=self._baseline)
-        if stage == 3:
-            # A2: heading gate rejected every candidate / projection
-            # ambiguous.  NO unconstrained global fallback -- that was
-            # the original fail-open defect.  Stop BEFORE any QP input
-            # is built (A3.2); baseline stays frozen.
-            diag.health = HealthState.EMERGENCY_STOP
-            diag.reason = "PROJECTION_AMBIGUOUS"
-            diag.fallback_used = True
-            diag.fallback_stage = 3
-            return out
-        # ---- A5.1 acceptance gate (unique state machine) -------------
+        # ---- raw projection ------------------------------------------------
+        if p.controller_projection_mode == "global":
+            # A8 instrumentation: pre-A5 raw-arc controller.  Stateless
+            # projection each cycle (no window, no heading gate), every
+            # projection accepted as the new baseline, no gate / reacquire /
+            # probation.  The audit side (episode/replay/env) stays on the
+            # accepted-arc ledger, which is what reports the difference.
+            _, _, _, arc, _ = closest_point(self.traj, state.x, state.y)
+            self._baseline = float(arc)
+            self._budget = 0.0
+            self._reject_run = 0
+            self._reacquire_mode = "NORMAL"
+            stage = 2
+        else:
+            # ---- windowed projection (window centred on baseline) ------
+            _, _, _, arc, stage = closest_point(
+                self.traj, state.x, state.y, yaw=state.yaw,
+                s_prev=self._baseline)
+            if stage == 3:
+                # A2: heading gate rejected every candidate / projection
+                # ambiguous.  NO unconstrained global fallback -- that was
+                # the original fail-open defect.  Stop BEFORE any QP input
+                # is built (A3.2); baseline stays frozen.
+                diag.health = HealthState.EMERGENCY_STOP
+                diag.reason = "PROJECTION_AMBIGUOUS"
+                diag.fallback_used = True
+                diag.fallback_stage = 3
+                return out
+        # ---- A5.1 acceptance gate (unique state machine, windowed only) -
         if self._baseline is None:
             # anchor cycle: nothing to compare against; accept the first
             # trustworthy projection (module semantics: first step banks
             # nothing and judges against the bare margin).
             self._baseline = float(arc)
             self._reject_run = 0
-        else:
+        elif p.controller_projection_mode != "global":
             prev = self._baseline
             # 1) bank PHYSICAL displacement along the tangent at the last
             #    ACCEPTED arc (never the raw candidate's tangent).
