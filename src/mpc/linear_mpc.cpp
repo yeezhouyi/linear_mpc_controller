@@ -20,6 +20,10 @@ void LinearMpcController::setReference(std::vector<TrackPoint> traj)
   traj_ = std::move(traj);
   fallback_.reset();
   have_warm_ = false;
+  // A5.1: a new Path resets the gate (never carry a stale anchor across).
+  gate_.reset(0.0);
+  gate_initialized_ = false;
+  reject_run_ = 0;
 }
 
 MpcCycleResult LinearMpcController::computeCycle(double px, double py, double yaw, double v, double omega)
@@ -33,9 +37,55 @@ MpcCycleResult LinearMpcController::computeCycle(double px, double py, double ya
     return res;
   }
 
+  // ---- A2 raw windowed projection + A5.1 acceptance gate --------------
+  const double s_prev = gate_initialized_ ? gate_.accepted_arc : -1.0;
+  const WindowedProjection raw = closestPointWindowed(
+    traj_, px, py, yaw, s_prev, {}, 0,
+    params_.back_m, params_.fwd_m, params_.reacquire_m, params_.wide_m,
+    params_.heading_gate_rad, params_.tie_eps_m);
+  res.projection_stage = raw.stage;
+  if (raw.stage == 3) {
+    // NO unconstrained global-argmin fallback (fail-open closed, A2).
+    res.health = HealthState::EMERGENCY_STOP;
+    res.reason = "PROJECTION_AMBIGUOUS";
+    res.fallback_used = true;
+    res.accepted_arc = gate_.accepted_arc;
+    return res;
+  }
+  if (!gate_initialized_) {
+    // anchor cycle: accept the first trustworthy projection (controller
+    // semantics: baseline = raw arc unconditionally, mirroring mpc.py).
+    gate_.reset(raw.arc);
+    gate_initialized_ = true;
+    reject_run_ = 0;
+  } else {
+    // tangent at the last ACCEPTED arc (never the raw candidate's segment)
+    const TrackPoint tan_pt = sampleByArc(traj_, gate_.accepted_arc);
+    const GateDecision dec = gate_.step(px, py, raw.arc, tan_pt.yaw);
+    if (!dec.accepted) {
+      ++reject_run_;
+    } else {
+      reject_run_ = 0;
+    }
+    if (reject_run_ > params_.max_reject_run) {
+      // A4.2 timeout subset (recorded): persistent rejection stops the run.
+      // The full seeking/commit/probation protocol is the follow-up unit.
+      res.health = HealthState::EMERGENCY_STOP;
+      res.reason = "PROJECTION_LOST";
+      res.fallback_used = true;
+      res.accepted_arc = gate_.accepted_arc;
+      res.reject_run = reject_run_;
+      return res;
+    }
+  }
+  // anchor/err at the ACCEPTED arc (A5.0): the QP never sees a rejected
+  // raw projection.
   TrackPoint anchor;
-  const Eigen::Vector4d x0 = frenetState(traj_, px, py, yaw, v, omega, params_.lookahead_m, anchor);
+  Eigen::Vector4d x0;
+  frenetErrorAtArc(px, py, yaw, v, omega, anchor, x0);
   res.e_used = x0;
+  res.accepted_arc = gate_.accepted_arc;
+  res.reject_run = reject_run_;
 
   CondensedMpcProblem prob(params_, traj_, anchor.s);
   Eigen::MatrixXd H, C;
@@ -57,8 +107,11 @@ MpcCycleResult LinearMpcController::computeCycle(double px, double py, double ya
     have_warm_ = true;
     const double a0 = sol.u(0);
     const double alpha0 = sol.u(1);
-    const double v_cmd = x0(kV) + params_.Ts * a0;
+    double v_cmd = x0(kV) + params_.Ts * a0;
     const double w_cmd = x0(kOmega) + params_.Ts * alpha0;
+    if (reject_run_ > 0) {
+      v_cmd = std::min(v_cmd, params_.v_probation);   // A5.0 reject cap
+    }
     res.constraint_violation = maxConstraintViolation(x0, prob, sol.u);
 
     int stage = 0;
@@ -93,6 +146,26 @@ double LinearMpcController::maxConstraintViolation(const Eigen::Vector4d & x0,
       std::fabs(x(kOmega)) - params_.omega_max});
   }
   return std::max(viol, 0.0);
+}
+
+void LinearMpcController::frenetErrorAtArc(
+  double px, double py, double yaw, double v, double omega,
+  TrackPoint & anchor, Eigen::Vector4d & err) const
+{
+  double arc = gate_.accepted_arc;
+  if (params_.lookahead_m > 0.0) {
+    arc = std::min(arc + params_.lookahead_m, traj_.back().s);
+  }
+  arc = std::min(std::max(arc, 0.0), traj_.back().s);
+  anchor = sampleByArc(traj_, arc);
+  const double e_y = (px - anchor.x) * (-std::sin(anchor.yaw)) +
+                     (py - anchor.y) * std::cos(anchor.yaw);
+  double dpsi = std::fmod(yaw - anchor.yaw + kPi, 2.0 * kPi);
+  if (dpsi < 0.0) {
+    dpsi += 2.0 * kPi;
+  }
+  dpsi -= kPi;
+  err << e_y, dpsi, v, omega;
 }
 
 }  // namespace linear_mpc_controller

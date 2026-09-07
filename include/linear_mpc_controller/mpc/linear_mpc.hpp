@@ -8,6 +8,8 @@
 #include <vector>
 
 #include "linear_mpc_controller/model/differential_drive_model.hpp"
+#include "linear_mpc_controller/model/projection_gate.hpp"
+#include "linear_mpc_controller/model/projection_search.hpp"
 #include "linear_mpc_controller/mpc/fallback_policy.hpp"
 #include "linear_mpc_controller/mpc/qp_problem.hpp"
 
@@ -26,6 +28,10 @@ struct MpcCycleResult
   double constraint_violation = 0.0;
   bool fallback_used = false;
   Eigen::Vector4d e_used = Eigen::Vector4d::Zero();
+  // ---- A5.2/A5.3 accepted-arc diagnostics -----------------------------
+  double accepted_arc = 0.0;      // A5.1 baseline after this cycle
+  int projection_stage = 2;       // 0/1/2 window, 3 ambiguous (stop)
+  int reject_run = 0;
 };
 
 class LinearMpcController
@@ -36,9 +42,17 @@ public:
   void setReference(std::vector<TrackPoint> traj);
   MpcCycleResult computeCycle(double px, double py, double yaw, double v, double omega);
 
+  // A5 diagnostics for tests/audits
+  double acceptedArc() const { return gate_.accepted_arc; }
+  int rejectRun() const { return reject_run_; }
+
 private:
   double maxConstraintViolation(const Eigen::Vector4d & x0,
     const CondensedMpcProblem & prob, const Eigen::VectorXd & U) const;
+  /// (anchor, err) at the ACCEPTED arc (A5.0/A3.1): e_y/e_psi recomputed in
+  /// the accepted arc's tangent frame, never at the raw candidate.
+  void frenetErrorAtArc(double px, double py, double yaw, double v, double omega,
+    TrackPoint & anchor, Eigen::Vector4d & err) const;
 
   MpcParams params_;
   std::vector<TrackPoint> traj_;
@@ -47,6 +61,10 @@ private:
   Eigen::VectorXd warm_;
   bool have_warm_ = false;
   long long cycle_ = 0;
+  // ---- A5.1 acceptance-gate state (reset with the reference, A5.1 note) --
+  ProjectionGateState gate_;
+  bool gate_initialized_ = false;
+  int reject_run_ = 0;
 };
 
 }  // namespace linear_mpc_controller

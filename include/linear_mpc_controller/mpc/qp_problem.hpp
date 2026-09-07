@@ -30,6 +30,19 @@ struct MpcParams
   double omega_max = 2.0;
   double a_max = 1.0, alpha_max = 2.0;
   double lookahead_m = 0.0;
+  // ---- A5.1 acceptance gate (declared; numeric copies of Python) ------
+  double projection_margin_m = 0.02;
+  double allowance_cap_m = 0.30;
+  double odom_step_noise_m = 0.015;
+  double back_m = 0.08;
+  int max_reject_run = 5;
+  double v_probation = 0.15;
+  // ---- A2 windowed projection defaults --------------------------------
+  double fwd_m = 0.30;
+  double reacquire_m = 1.00;
+  double wide_m = 5.00;
+  double heading_gate_rad = 1.5708;
+  double tie_eps_m = 0.05;
   int qp_max_iter = 1500;
   double qp_abs_tol = 1e-6, qp_rel_tol = 1e-5;
 };
