@@ -72,6 +72,11 @@ def main():
     ap.add_argument("--recorded", required=True)
     ap.add_argument("--output", required=True)
     ap.add_argument("--v-max", type=float, default=1.5)
+    ap.add_argument("--v-min", type=float, default=0.0,
+                    help="A8 matrix axis: velocity lower bound")
+    ap.add_argument("--controller-projection-mode", choices=("windowed", "global"),
+                    default="windowed",
+                    help="A8 matrix axis: A5 gated vs pre-A5 raw-arc controller")
     ap.add_argument("--timeout-s", type=float, default=600.0)
     ap.add_argument("--qp-max-iter", type=int, default=500,
                     help="offline evaluation needs convergence, not the "
@@ -84,7 +89,10 @@ def main():
     traj = build_trajectory(poses)
 
     controller = LinearMpcController(
-        MpcParams(N=25, qp_max_iter=args.qp_max_iter), traj)
+        MpcParams(N=25, qp_max_iter=args.qp_max_iter,
+                  v_min=args.v_min,
+                  controller_projection_mode=args.controller_projection_mode),
+        traj)
     controller.set_reference(traj)
     x0, y0 = float(poses[0][0]), float(poses[0][1])
     yaw0 = float(poses[0][2]) if len(poses[0]) > 2 else 0.0
