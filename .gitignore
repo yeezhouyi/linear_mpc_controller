@@ -5,3 +5,6 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 outputs/
+build_core/
+log/
+build-osqp/

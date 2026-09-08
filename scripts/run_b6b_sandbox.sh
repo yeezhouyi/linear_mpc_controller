@@ -15,15 +15,35 @@ REPO=$WS/src/linear_mpc_controller
 CFG=$REPO/config/controller_server.yaml
 LOG=/tmp/b6b_controller.log
 
+# full_cleanup kills ONLY this B6B stack, precisely (spec part 5, pitfall
+# 5): a `pkill -9 -f <pattern>` matches the FULL command line, so it also
+# hits the ancestor `bash -c "...pattern..."` that launched this script
+# (self-kill that looks like an unexplained mid-gate death) and broad
+# patterns like "nav2_" or "ros2 daemon" take down unrelated processes or
+# the user's own daemon.  Instead:
+#   * controller_server + its `ros2 run` launcher are identified by OUR
+#     config path on their command line (--params-file $CFG);
+#   * the sandbox robot is identified by its unique script name;
+#   * processes on this shell's own ancestor chain are always skipped;
+#   * the user's `ros2 daemon` is NEVER touched (no CLI is used anymore).
+is_self_ancestor() {
+  local p=$1 a=$self
+  while [ "$a" != "0" ] && [ -n "$a" ]; do
+    [ "$a" = "$p" ] && return 0
+    a=$(ps -o ppid= -p "$a" 2>/dev/null | tr -d ' ')
+  done
+  return 1
+}
 full_cleanup() {
-  pkill -9 -f "controller_server" 2>/dev/null || true
-  pkill -9 -f "nav2_sandbox_robot" 2>/dev/null || true
-  pkill -9 -f "gz[ ]sim" 2>/dev/null || true
-  pkill -9 -f "ros_gz" 2>/dev/null || true
-  pkill -9 -f "nav2_" 2>/dev/null || true
-  pkill -9 -f "lifecycle_manager" 2>/dev/null || true
-  pkill -9 -f "ros2 daemon" 2>/dev/null || true
-  sleep 2
+  local self=$$ p
+  for p in $(ps -eo pid=,args= \
+              | grep -F -e "$CFG" -e "nav2_sandbox_robot.py" \
+              | awk '{print $1}' | sort -u); do
+    [ "$p" = "$self" ] && continue
+    is_self_ancestor "$p" && continue
+    kill -9 "$p" 2>/dev/null || true
+  done
+  sleep 1
 }
 
 run_stage() {
