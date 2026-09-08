@@ -1,8 +1,13 @@
 # linear_mpc_controller
 
 差分底盘**线性时变 MPC 轨迹跟踪控制器**——`mpc_controller`（v0.2.1，ros2_control 线性 MPC 插件）的进阶项目，
-依据《线性 MPC 与残差强化学习轨迹跟踪控制器进阶》计划（U1–U12、R1–R25）推进。
-目标链：`上层路径 → Trajectory Adapter → Linear MPC → (残差 RL + 安全投影) → Velocity Arbiter → /cmd_vel → Gazebo`。
+> 封板口径：对外数字唯一来源 = `ros2_tunnel_explorer` 的
+> `docs/seal_results.json` @ `bline-seal-20260908`（README 与简历同源渲染）；
+> 本仓封板主张见文末「Day 10 封板主张」表。**残差 RL 支线已冻结，不作为投递主张**
+> （依据与复活条件：`docs/residual_rl_postmortem.md`）。
+
+依据《线性 MPC 与残差强化学习轨迹跟踪控制器进阶》计划（U1–U12、R1–R25）推进（RL 部分已冻结）。
+目标链：`上层路径 → Trajectory Adapter → Linear MPC（+ 安全投影 / 位移预算接受门）→ Velocity Arbiter → /cmd_vel → Gazebo`（自建 MPC 接管 /cmd_vel；残差 RL 支线已冻结，不接入该链）。
 
 ## 状态（本分支/本次成果）
 
@@ -16,7 +21,7 @@
 | **基准工具** | `benchmark_tools/`：RMSE/p95/max + QP 统计 + run manifest | ✅ 基线见下 |
 | **C++/Eigen 核心** | `include/ src/`（model/mpc/safety，U2–U4 结构） | ✅ **WSL2 门槛通过**：`cmake -DBUILD_TESTING=ON` 构建 + ctest 全绿 |
 | **ROS2 层** | `ros2/`（linear_mpc_node / trajectory_adapter / velocity_arbiter）+ launch/config/worlds + `test/test_ros_contract.py` | ✅ WSL2 `colcon build` 绿；契约测试 5/5 绿；launch 已修复为按安装 share 目录解析 world/config（OpaqueFunction）；**Gazebo TurtleBot3 闭环冒烟待跑（U5/C3 验收项）** |
-| **RL 环境** | `mpc_rl_env/`：fast env + `gym_adapter`（SB3 env_checker 绿）+ PPO 训练入口 + config | ✅ 契约/奖励/投影/gym 适配测试全绿（系统 python 跳过 gym 测试，mc_venv 全绿）；**残差 PPO 训练运行中（seed 0, 200k steps）** |
+| **RL 环境** | `mpc_rl_env/`：fast env + `gym_adapter`（SB3 env_checker 绿）+ PPO 训练入口 + config | ✅ 契约/奖励/投影/gym 适配测试全绿（系统 python 跳过 gym 测试，mc_venv 全绿）；**残差 PPO 已冻结 / 停止训练**（仅保留环境、契约与测试；不作为投递主张） |
 | **系统辨识** | `system_identification/`：一阶滞后 + 延迟拟合（独立验证集） | ✅ 测试绿 |
 
 ## 参考核心基线（纯 MPC，离线，无扰动）
@@ -90,11 +95,11 @@ results/             参考核心基线归档
 | A1 黄金对拍 | OsqpSolver ↔ Python AdmmQp 同题互验,max\|dx\| 与目标函数 1e-4 相对一致 | `test_qp_golden` + `test/golden_qp_vectors.txt`(98aace4) |
 | A4 位移门禁 | Gazebo 闭环真实运动,位移 3.916m > 0.05m | `artifacts/motion_check/`(0fe3939) |
 | U4 ROS 20-cell 基线 | **20/20 motion PASS**,位移 1.8-5.4m(4 轨迹 × 5 种子) | `results/mpc_baseline_ros/`(e11f889) |
-| 残差 RL postmortem | 三轮受控迭代复盘,冻结决策+复活条件 | `docs/residual_rl_postmortem.md`(33edd98) |
+| 残差 RL postmortem（**已冻结**） | 三轮受控迭代复盘,冻结决策+复活条件；**RL 不作为投递主张** | `docs/residual_rl_postmortem.md`(33edd98) |
 | A3 归因表 | plant ZOH 修复后,纯 MPC 全随机化包络 24/24 格 4/4 完成,RMS ≤ 0.029m;离线 vs RL 环境落差=plant 发散 bug(已修 49464b3) | `results/attribution_study/`(fa51b07) |
 | A4/C5 系统辨识 | τ=0.04s 恢复误差 3.9%(VAF 0.99);τ<采样分辨率如实记录不可辨;lookahead 接线诚实负结果(补偿量=噪声级) | `results/sysid_study/`(67f5def) |
 | B4 桥(回放侧) | 录制 JSON → 参考轨迹补全 → 纯 MPC 离线跟踪:直段+90°弧 252 步完成,e_y_rms 0.004m | `benchmark_tools/scripts/replay_path_mpc.py`(fa51b07) |
-| PPO v2 | 重训于修复后环境(1M 步,4 轨迹课程);判定见 `results/eval_residual_c8_iter2/` | 训练中→收口 |
+| PPO v2（**已冻结**） | 不重训、不收口；判定与复活条件见 `docs/residual_rl_postmortem.md`,历史判定 `results/eval_residual_c8_iter2/` | 冻结 |
 
 分层声明:以上全部为 WSL2/Gazebo 仿真结果,不含真实硬件声明。
 ## Day 10 封板主张(2026-09-08,canonical 来源 = ros2_tunnel_explorer `docs/seal_results.json` @ bline-merge b43760b)
