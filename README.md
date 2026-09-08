@@ -97,3 +97,19 @@ results/             参考核心基线归档
 | PPO v2 | 重训于修复后环境(1M 步,4 轨迹课程);判定见 `results/eval_residual_c8_iter2/` | 训练中→收口 |
 
 分层声明:以上全部为 WSL2/Gazebo 仿真结果,不含真实硬件声明。
+## Day 10 封板主张(2026-09-08,canonical 来源 = ros2_tunnel_explorer `docs/seal_results.json` @ bline-merge b43760b)
+
+> 本节的对外主张与简历/README 表同源渲染于该单份 JSON(含复现命令与 SHA);
+> 单独改动此处数字即为口径违规。
+
+| 主张 | 要点 | 证据 |
+|---|---|---|
+| A5 有状态投影 + 接受门 | Frenet 窗口化投影 + 位移预算接受门替代无状态全局最近点,消除折返车道误吸附(A5.1/A5.2/A4.2,含 C++ 镜像) | `mpc_core/` + `test_reacquire`/`test_controller_gate`(eddcf11 线) |
+| 12 格消融矩阵 | 3 几何 × 2 v_min × 2 投影模式;失效轴 = 几何与 v_min **非投影实现**(10/12 格跨模式逐位相同) → 无需机动生成层 | `results/a8_replay/MATRIX.md` + cell_*.json(be39ffe/85276e3) |
+| 运动学可行性审计 | 原始计划 16/250 参考点超 ω_max=2.0;修复判据 `v ≤ ω_max/\|κ\|` 已实现 + `omega_violations` 守卫 | `trajectory_tools/curvature_estimator.py`(85276e3) |
+| 跨语言 golden 对拍 | projection_golden.json 双端消费逐位一致 | `ctest projection_golden` + pytest parity(eddcf11) |
+| B6B Nav2 插件 | pluginlib 加载 + 生命周期 1 4/4/直线 7/7/弧线 8/8;分级失效契约;位姿变换进路径系;终端减速负向对照 intact 1.98 m vs 去除 13.14–13.16 m(Δ11.18 m) | `ros2/nav2_mpc_controller.*` + `scripts/nc_b6b_negative.sh`(ce0a256/855f846/4c2bcce) |
+| 边界 | B6B **未接入覆盖链**;全仓无硬实时声明 | 见 seal JSON `boundaries` |
+
+复现入口(均在 seal JSON `reproduce`): 矩阵 `python3 benchmark_tools/scripts/run_a8_matrix.py`;真实计划审计
+`benchmark_tools/scripts/audit_b6_coverage.py`(served-map masks)。
