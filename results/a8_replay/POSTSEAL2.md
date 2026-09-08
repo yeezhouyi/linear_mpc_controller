@@ -63,3 +63,24 @@ postseal2_matrix/ (per-cell JSON + full log).
   design problem, does not preserve the numeric chain).
 - No tolerance/audit relaxation anywhere; the sealed numbers and tags
   (cloud-seal-20260908 / postseal-20260908) are untouched.
+
+## Final disposition of the remaining review items (2026-09-09)
+
+- AMCL localization bias (+2.4 pp on the grid gauge): SEALED, do not
+  fix.  It moves the headline only inside its own confidence band
+  (0.628, band 0.559-0.736); a real fix means a changed localization
+  config + full-chain re-run -- a new experiment, not a correction.
+  Recording IS the conclusion.
+- Parity depth: SEALED, do not extend.  The layers use their strongest
+  oracle already, not blanket sibling cross-checks: projection gating
+  -> shared golden (bit-exact cross-language); adapter speed
+  completion -> guard + parity test; MPC solve -> QP golden (solution
+  vs independently computed ground truth -- a sibling check validates
+  the sibling, a golden validates the truth); integration ->
+  behavioural gates (sandbox/gtest).  Both languages are pinned by the
+  same docx + the same golden + the same guard, so there is no
+  independent evolution freedom to justify deeper stepwise parity;
+  that path would only add two-sided lockstep file maintenance.
+
+Full verdict table (items 1-5) lives in the explorer repo,
+docs/day68_chain_audit.md, section Post-seal2 final disposition.
