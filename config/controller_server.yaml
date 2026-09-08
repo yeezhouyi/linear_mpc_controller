@@ -1,0 +1,64 @@
+# B6B sandbox: Nav2 controller_server config (nav2_bringup-style nesting).
+# The controller_server internally owns a Costmap2DROS named "local_costmap"
+# (root namespace) -> its params are a SEPARATE top-level node block here.
+# Sandbox frames: robot odom == plan frame == "odom" (fake robot publishes
+# its own odom/tf), so the plugin's pose-in-path-frame path is exercised
+# with identity transform; the tf-transform branch is for deployments where
+# the plan lives in "map".
+controller_server:
+  ros__parameters:
+    use_sim_time: False
+    controller_frequency: 20.0
+    costmap_update_timeout: 0.30
+    min_x_velocity_threshold: 0.001
+    min_y_velocity_threshold: 0.001
+    min_theta_velocity_threshold: 0.001
+    failure_tolerance: 0.3
+    odom_topic: "/odom"
+    cmd_vel_topic: "/cmd_vel"
+    publish_zero_velocity: True
+    progress_checker_plugins: ["progress_checker"]
+    goal_checker_plugins: ["general_goal_checker"]
+    controller_plugins: ["FollowPath"]
+
+    progress_checker:
+      plugin: "nav2_controller::SimpleProgressChecker"
+      required_movement_radius: 0.1
+      movement_time_allowance: 10.0
+
+    general_goal_checker:
+      plugin: "nav2_controller::SimpleGoalChecker"
+      xy_goal_tolerance: 0.25
+      yaw_goal_tolerance: 0.25
+      stateful: True
+
+    FollowPath:
+      plugin: "linear_mpc_controller::LinearMpcNav2Controller"
+      odom_frame_id: "odom"
+      Ts: 0.05
+      N: 25
+      v_max: 0.5
+      v_min: 0.0
+      omega_max: 2.0
+      a_max: 1.0
+      qp_max_iter: 1500
+      # Terminal-stop margin: without it the tracker overshot the plan end
+      # by 13.37 m on a 2.36 m arc (recorded in the B6B spec).
+      terminal_stop_margin: 0.20
+      qp_fail_max: 3
+      ambiguous_max: 5
+      tf_tolerance: 0.2
+
+# in-process Costmap2DROS owned by the controller_server; no layers needed
+# (this plugin is a trajectory tracker -- scope comment in the header).
+# The costmap node's param block is read from a sub-node whose name is not
+# reliably reachable via this file's top-level keys, so we leave it on its
+# defaults (global_frame=map) and the sandbox robot broadcasts a static
+# identity map->odom transform to satisfy its tf wait.
+local_costmap:
+  ros__parameters:
+    use_sim_time: False
+    robot_base_frame: "base_link"
+    robot_radius: 0.10
+    odom_topic: "/odom"
+    plugins: []

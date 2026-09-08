@@ -18,6 +18,15 @@
 // executable velocity or throws a nav2_core ControllerException.  Silently
 // returning zero velocity is the worst choice (the BT keeps RUNNING with a
 // stopped robot).
+//
+// Terminal yaw semantics: a differential tracker converges to the path and
+// therefore ARRIVES at the final pose with the path-end TANGENT heading --
+// it cannot rotate in place to satisfy an arbitrary goal yaw.  A yaw-
+// tolerant goal checker therefore needs a path whose final pose carries the
+// tangential attitude (real Nav2 planners emit this).  A path whose final
+// quaternion is identity on a curved segment makes the goal unsatisfiable
+// in yaw; that property is what the terminal-stop negative control relies
+// on (only the terminal clamp then stops the robot from driving out).
 #ifndef LINEAR_MPC_CONTROLLER__ROS2__NAV2_MPC_CONTROLLER_HPP_
 #define LINEAR_MPC_CONTROLLER__ROS2__NAV2_MPC_CONTROLLER_HPP_
 
@@ -96,6 +105,7 @@ protected:
   int ambiguous_max_ = 5;
 
   double tf_tolerance_ = 0.2;
+  long long cycle_diag_ = 0;
   double last_cmd_v_ = 0.0;
   double last_cmd_w_ = 0.0;
 };

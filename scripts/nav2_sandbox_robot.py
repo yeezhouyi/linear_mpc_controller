@@ -16,8 +16,9 @@ import time
 
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import QoSProfile, DurabilityPolicy
 from geometry_msgs.msg import Twist, TwistStamped
-from nav_msgs.msg import Odometry
+from nav_msgs.msg import Odometry, OccupancyGrid
 from std_msgs.msg import Header
 from tf2_ros import TransformBroadcaster
 from geometry_msgs.msg import TransformStamped
@@ -30,38 +31,97 @@ class SandboxRobot(Node):
         rate = self.get_parameter("publish_rate").value
         self.period = 1.0 / rate
 
+        # B6B stage 2b: the arc scenario must START OFFLINE (offset pose)
+        # so the steering law is excited; otherwise max|omega| never rises.
+        self.declare_parameter("start_x", 0.0)
+        self.declare_parameter("start_y", 0.0)
+        self.declare_parameter("start_yaw", 0.0)
+
         self.lock = threading.Lock()
         self.v = 0.0
         self.w = 0.0
         self.v_ts_t = 0.0
         self.w_ts_t = 0.0
-        self.robot_x = 0.0
-        self.robot_y = 0.0
-        self.robot_yaw = 0.0
+        self.robot_x = self.get_parameter("start_x").value
+        self.robot_y = self.get_parameter("start_y").value
+        self.robot_yaw = self.get_parameter("start_yaw").value
         self.now = self.get_clock().now()
 
-        self.sub_ts = self.create_subscription(
-            TwistStamped, "/cmd_vel", self.cb_ts, 10)
-        self.sub_tw = self.create_subscription(
-            Twist, "/cmd_vel", self.cb_tw, 10)
+        # Subscribe the cmd_vel flavour that actually exists -- publishing
+        # Twist AND TwistStamped on one topic makes the RMW complain about
+        # type mismatches and pollutes debugging.  Probe the topic type
+        # unless the caller pins it explicitly with cmd_vel_type:=.
+        self.declare_parameter("cmd_vel_type", "")   # "" = auto-probe
+        ctype = self.get_parameter("cmd_vel_type").value
+        if not ctype:
+            ctype = self._probe_type()
+
+        if ctype == "TwistStamped":
+            self.sub = self.create_subscription(
+                TwistStamped, "/cmd_vel", self.cb_ts, 10)
+            self.get_logger().info("subscribing /cmd_vel TwistStamped")
+        else:
+            self.sub = self.create_subscription(
+                Twist, "/cmd_vel", self.cb_tw, 10)
+            self.get_logger().info("subscribing /cmd_vel Twist")
 
         self.odom_pub = self.create_publisher(Odometry, "/odom", 10)
         self.tf_br = TransformBroadcaster(self)
+        self.static_br = TransformBroadcaster(self)
+
+        # Empty occupancy grid (latched) so the controller_server's costmap
+        # static layer receives a map and the costmap becomes "current" --
+        # otherwise controller_server aborts with "Costmap timed out waiting
+        # for update".
+        map_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
+        self.map_pub = self.create_publisher(OccupancyGrid, "/map", map_qos)
+        m = OccupancyGrid()
+        m.header.frame_id = "map"
+        m.info.resolution = 0.1
+        m.info.width = 60
+        m.info.height = 60
+        m.info.origin.position.x = -3.0
+        m.info.origin.position.y = -3.0
+        m.info.origin.orientation.w = 1.0
+        m.data = [0] * (60 * 60)
+        self.map_pub.publish(m)
 
         self.get_logger().info("sandbox robot up (rate %.0f Hz)" % rate)
         self.timer = self.create_timer(self.period, self.step)
+
+    def _probe_type(self):
+        import subprocess
+        try:
+            out = subprocess.run(
+                ["ros2", "topic", "info", "/cmd_vel", "-t"],
+                capture_output=True, text=True, timeout=10).stdout
+            for ln in out.splitlines():
+                if "Type:" in ln:
+                    return ln.split(":")[-1].strip().split("/")[-1]
+        except Exception:
+            pass
+        # Jazzy controller_server default is TwistStamped
+        return "TwistStamped"
 
     def cb_ts(self, msg: TwistStamped):
         with self.lock:
             self.v = msg.twist.linear.x
             self.w = msg.twist.angular.z
             self.v_ts_t = time.monotonic()
+        if not hasattr(self, "_got"):
+            self._got = True
+            self.get_logger().info(
+                "FIRST cmd_vel TwistStamped: v=%.3f w=%.3f" % (self.v, self.w))
 
     def cb_tw(self, msg: Twist):
         with self.lock:
             self.v = msg.linear.x
             self.w = msg.angular.z
             self.w_ts_t = time.monotonic()
+        if not hasattr(self, "_got"):
+            self._got = True
+            self.get_logger().info(
+                "FIRST cmd_vel Twist: v=%.3f w=%.3f" % (self.v, self.w))
 
     def step(self):
         with self.lock:
@@ -72,6 +132,14 @@ class SandboxRobot(Node):
         self.robot_yaw += w * dt
         self.now = self.get_clock().now()
         t = self.now.to_msg()
+
+        # Static identity map->odom so the controller_server's in-process
+        # costmap (default global_frame=map) resolves base_link->map.
+        st = TransformStamped()
+        st.header = Header(stamp=t, frame_id="map")
+        st.child_frame_id = "odom"
+        st.transform.rotation.w = 1.0
+        self.static_br.sendTransform(st)
 
         odom = Odometry()
         odom.header = Header(stamp=t, frame_id="odom")
