@@ -1,0 +1,20 @@
+{
+ "cell": "cap|v_min=-0.5|global_legacy",
+ "geometry": "cap",
+ "v_min": -0.5,
+ "controller_projection_mode": "global_legacy",
+ "audit_mode": "accepted",
+ "done_reason": "COMPLETED",
+ "raw_arc_final": 32.209,
+ "accepted_arc_final": 32.209,
+ "progress_ratio": 0.9958,
+ "skipped_arc_ratio": 0.0,
+ "max_arc_jump": 0.025,
+ "projection_jump_count": 0,
+ "projection_reacquire_count": 0,
+ "e_y_rms": 0.0155,
+ "qp_failures": 0,
+ "v_end": 0.314,
+ "steps": 1614,
+ "path_length_m": 32.344
+}
