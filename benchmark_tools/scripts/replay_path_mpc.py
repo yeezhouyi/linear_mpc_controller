@@ -134,7 +134,10 @@ def main():
         e_psi_v = wrap_angle(st.yaw - anchor.yaw)
         out = controller.compute_cycle(
             KinematicState(x=st.x, y=st.y, yaw=st.yaw, v=st.v, omega=st.omega))
-        cmd_v = min(max(out.v_cmd, 0.0), args.v_max)
+        # A6: lower bound is the matrix axis v_min (was hardwired 0.0, which
+        # welded fwd-only into the replayer and made every v_min<0 cell a
+        # false negative -- the reverse permission never reached the plant).
+        cmd_v = min(max(out.v_cmd, args.v_min), args.v_max)
         cmd_w = max(min(out.omega_cmd, 2.0), -2.0)
         plant.step(cmd_v, cmd_w, Ts)
         e_y.append(abs(e))

@@ -88,7 +88,14 @@ def run_tracking_episode(
     progress_min_gain: float = 0.1,
     max_lateral_error: float = 1.5,
     verbose: bool = False,
+    audit_mode: str = "accepted",
 ) -> EpisodeResult:
+    """audit_mode: "accepted" (default) routes the ledger through the shared
+    ProgressAllowanceGate (A5.2); "raw" judges progress/completion on the raw
+    projection arc with NO gate -- the historically published (lying) ruler.
+    "raw" exists ONLY for the A8 replication rows, which reproduce the old
+    published numbers to show what they lied about; it must never be used to
+    accept or reject a matrix cell (A8.3)."""
     res = EpisodeResult(track_name=track_name)
     arc_hist: List[float] = []
     st = plant.state
@@ -107,14 +114,17 @@ def run_tracking_episode(
     # (Local adaptation, recorded: the docx episode patch leaves the module
     # default accepted_arc=0.0, which only matches runs started at arc ~ 0.)
     _, _, _, seed_arc, _ = closest_point(traj, st.x, st.y)
-    gate = ProgressAllowanceGate(v_max=controller.params.v_max, Ts=Ts,
-                                 accepted_arc=float(seed_arc))
-    # Prime the ledger with the initial pose: the module's first step() has no
-    # previous pose and judges against the bare margin, but by the time the
-    # first in-loop projection runs the plant has already advanced one control
-    # period (v*Ts), which would trip the margin by a hair.  (Local adaptation,
-    # recorded.)  Anchoring here makes the first real step judge normally.
-    gate.step(traj, st.x, st.y, float(seed_arc))
+    gate = None
+    if audit_mode != "raw":
+        gate = ProgressAllowanceGate(v_max=controller.params.v_max, Ts=Ts,
+                                     accepted_arc=float(seed_arc))
+        # Prime the ledger with the initial pose: the module's first step()
+        # has no previous pose and judges against the bare margin, but by the
+        # time the first in-loop projection runs the plant has already
+        # advanced one control period (v*Ts), which would trip the margin by
+        # a hair.  (Local adaptation, recorded.)  Anchoring here makes the
+        # first real step judge normally.
+        gate.step(traj, st.x, st.y, float(seed_arc))
     path_len = float(traj.s[-1]) if len(traj.s) else 0.0
 
     for step in range(max_steps):
@@ -134,29 +144,37 @@ def run_tracking_episode(
         e_psi = wrap_angle(st.yaw - traj.sample_by_s(arc).yaw)
 
         # ---- A5.2 reachability-gated progress (capture-resolve) ---------
-        dec = gate.step(traj, st.x, st.y, arc)
-        anchor_pt = traj.sample_by_s(arc)
-        near_anchor = math.hypot(st.x - anchor_pt.x, st.y - anchor_pt.y) <= projection_capture_m
-        if not dec.accepted and near_anchor:
-            if not in_jump_episode:
-                res.projection_jump_count += 1
-                in_jump_episode = True
-            # the bypassed span was physically cut: book it once (re-baseline
-            # makes the next cycle's delta_s small), then re-anchor FORWARD
-            # ONLY (module spends the budget like an accept).
-            res.skipped_arc_m += dec.delta_s
-            gate.rebaseline(arc)
-        elif not dec.accepted:
-            if not in_jump_episode:
-                res.projection_jump_count += 1
-                in_jump_episode = True
-            # unresolved: a returning anchor resumes crediting without
-            # double-booking the return lane (no re-baseline here).
+        if audit_mode == "raw":
+            # Replication ruler (A8.3): the raw arc IS the progress -- no
+            # gate, no capture-resolve, no jump booking.  Reproduces the
+            # historical measurement exactly as it was (wrongly) done.
+            pass
         else:
-            in_jump_episode = False
-            if dec.delta_s > 0.0:
-                res.progress_m += dec.delta_s
-        res.arc_high_watermark = max(res.arc_high_watermark, gate.accepted_arc)
+            dec = gate.step(traj, st.x, st.y, arc)
+            anchor_pt = traj.sample_by_s(arc)
+            near_anchor = math.hypot(st.x - anchor_pt.x, st.y - anchor_pt.y) <= projection_capture_m
+            if not dec.accepted and near_anchor:
+                if not in_jump_episode:
+                    res.projection_jump_count += 1
+                    in_jump_episode = True
+                # the bypassed span was physically cut: book it once (re-baseline
+                # makes the next cycle's delta_s small), then re-anchor FORWARD
+                # ONLY (module spends the budget like an accept).
+                res.skipped_arc_m += dec.delta_s
+                gate.rebaseline(arc)
+            elif not dec.accepted:
+                if not in_jump_episode:
+                    res.projection_jump_count += 1
+                    in_jump_episode = True
+                # unresolved: a returning anchor resumes crediting without
+                # double-booking the return lane (no re-baseline here).
+            else:
+                in_jump_episode = False
+                if dec.delta_s > 0.0:
+                    res.progress_m += dec.delta_s
+        res.arc_high_watermark = max(
+            res.arc_high_watermark,
+            arc if audit_mode == "raw" else gate.accepted_arc)
 
         res.e_y.append(e_y)
         res.e_psi.append(e_psi)
@@ -171,6 +189,8 @@ def run_tracking_episode(
         res.constraint_violation.append(diag.constraint_violation)
         res.fallback_count += 1 if diag.fallback_used else 0
         res.qp_failures += 1 if diag.qp_status == "FAILED" else 0
+        # A4.2 reacquire events as reported by the controller's own counter
+        res.projection_reacquire_count = diag.reacquire_count
         arc_hist.append(arc)
 
         # A5.3: completion reads the HIGH-WATERMARK of accepted arc, never the
