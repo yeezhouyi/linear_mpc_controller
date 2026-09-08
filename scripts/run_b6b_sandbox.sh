@@ -38,7 +38,7 @@ is_self_ancestor() {
   return 1
 }
 full_cleanup() {
-  local self=$$ p ln snap
+  local self=$$ p args snap
   # Snapshot `ps` ONCE, then match with in-shell `case`.  The matcher
   # pattern must NEVER appear in any process argv: a `ps | grep -F -e $CFG`
   # pipeline puts CFG into grep's own argv, ps picks that transient PID back
@@ -47,12 +47,19 @@ full_cleanup() {
   # PID reuse the same code kills an unrelated process.  (Same family as the
   # documented full-commandline self-match trap; here the match string never
   # lives in argv at all.)
+  #
+  # PID extraction uses the DEFAULT IFS: `ps -eo pid=,args=` right-aligns
+  # the pid column to the widest PID, so on a space-padded row the old
+  # ${ln%% *} produced "" and `kill -9 ""` silently no-oped -- an all-no-op
+  # cleanup that a NEG-only trap test cannot detect (it only asserts the
+  # unrelated proc SURVIVES, which a no-op also satisfies).  With the
+  # default IFS, `read -r p args` strips the leading padding and p is the
+  # clean numeric pid; `case` matches only $args, the pid never matches.
   snap=$(ps -eo pid=,args=)
-  while IFS= read -r ln; do
-    [ -z "$ln" ] && continue
-    p=${ln%% *}
+  while read -r p args; do
+    [ -z "${p:-}" ] && continue
     [ "$p" = "$self" ] && continue
-    case "$ln" in
+    case "$args" in
       *"$CFG"* | *"nav2_sandbox_robot.py"*) ;;
       *) continue ;;
     esac
