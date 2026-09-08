@@ -13,6 +13,12 @@ LinearMpcController::LinearMpcController(const MpcParams & params, std::vector<T
     0.8, 10})
 {
   solver_ = makeDefaultSolver(params_.qp_max_iter, params_.qp_abs_tol, params_.qp_rel_tol);
+  // A4.2: the protocol reads the same declared numbers as Python's MpcParams.
+  reacq_.p.max_reject_run = params_.max_reject_run;
+  reacq_.p.v_probation = params_.v_probation;
+  reacq_.p.probation_steps = params_.probation_steps;
+  reacq_.p.reacquire_stable_steps = params_.reacquire_stable_steps;
+  reacq_.p.reacquire_timeout_steps = params_.reacquire_timeout_steps;
 }
 
 void LinearMpcController::setReference(std::vector<TrackPoint> traj)
@@ -24,6 +30,8 @@ void LinearMpcController::setReference(std::vector<TrackPoint> traj)
   gate_.reset(0.0);
   gate_initialized_ = false;
   reject_run_ = 0;
+  // A4.2: a new Path drops any in-flight reacquire (mirrors set_reference).
+  reacq_.reset();
 }
 
 MpcCycleResult LinearMpcController::computeCycle(double px, double py, double yaw, double v, double omega)
@@ -35,6 +43,42 @@ MpcCycleResult LinearMpcController::computeCycle(double px, double py, double ya
     res.reason = "no reference set";
     res.fallback_used = true;
     return res;
+  }
+
+  // ---- A4.2 reacquire seeking: no QP while we re-anchor ---------------
+  // Mirrors mpc.py: GLOBAL search with the heading gate ON; candidates must
+  // survive the four screens (distance / heading / ambiguity / same-seg
+  // stability) before an atomic commit; every seeking cycle decelerates to
+  // zero instead of feeding a stale anchor to the QP.
+  if (reacq_.inSeeking()) {
+    const WindowedProjection cand = closestPointWindowed(
+      traj_, px, py, yaw, -1.0, {}, 0,
+      params_.back_m, params_.fwd_m, params_.reacquire_m, params_.wide_m,
+      params_.heading_gate_rad, params_.tie_eps_m);
+    const ReacquireCycle rc = reacq_.seek(cand.seg, cand.arc, cand.stage);
+    res.reacquire_seeking = true;
+    res.reacquire_count = rc.reacquire_count;
+    res.in_probation = rc.in_probation;
+    res.projection_stage = cand.stage;
+    res.accepted_arc = gate_.accepted_arc;
+    if (rc.lost) {
+      res.health = HealthState::EMERGENCY_STOP;
+      res.reason = "PROJECTION_LOST";
+      res.fallback_used = true;
+      return res;
+    }
+    if (rc.committed) {
+      // atomic commit (A4.2 steps 4/5): new baseline, zeroed budget,
+      // dropped QP warm start -- then probation.
+      gate_.reset(rc.committed_arc);
+      gate_initialized_ = true;
+      reject_run_ = 0;
+      have_warm_ = false;
+      res.accepted_arc = gate_.accepted_arc;
+    }
+    res.health = HealthState::OK;
+    res.reason = "REACQUIRE_SEEKING";
+    return res;   // decel-to-zero: zero command while seeking
   }
 
   // ---- A2 raw windowed projection + A5.1 acceptance gate --------------
@@ -68,16 +112,16 @@ MpcCycleResult LinearMpcController::computeCycle(double px, double py, double ya
       reject_run_ = 0;
     }
     if (reject_run_ > params_.max_reject_run) {
-      // A4.2 timeout subset (recorded): persistent rejection stops the run.
-      // The full seeking/commit/probation protocol is the follow-up unit.
-      res.health = HealthState::EMERGENCY_STOP;
-      res.reason = "PROJECTION_LOST";
-      res.fallback_used = true;
-      res.accepted_arc = gate_.accepted_arc;
-      res.reject_run = reject_run_;
-      return res;
+      // A4.2: stop trusting the stale anchor and enter SEEKING.  mpc.py does
+      // NOT return on this cycle -- the QP still runs on the frozen baseline
+      // and the NEXT cycle decelerates to zero while seeking.
+      reacq_.enterSeeking();
     }
   }
+  // ---- A4.2 probation window (A5.0): speed cap, completion says no ----
+  const bool probation = reacq_.tickProbation();
+  res.in_probation = probation;
+  res.reacquire_count = reacq_.reacquire_events;
   // anchor/err at the ACCEPTED arc (A5.0): the QP never sees a rejected
   // raw projection.
   TrackPoint anchor;

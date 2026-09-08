@@ -10,6 +10,7 @@
 #include "linear_mpc_controller/model/differential_drive_model.hpp"
 #include "linear_mpc_controller/model/projection_gate.hpp"
 #include "linear_mpc_controller/model/projection_search.hpp"
+#include "linear_mpc_controller/model/reacquire.hpp"
 #include "linear_mpc_controller/mpc/fallback_policy.hpp"
 #include "linear_mpc_controller/mpc/qp_problem.hpp"
 
@@ -32,6 +33,10 @@ struct MpcCycleResult
   double accepted_arc = 0.0;      // A5.1 baseline after this cycle
   int projection_stage = 2;       // 0/1/2 window, 3 ambiguous (stop)
   int reject_run = 0;
+  // ---- A4.2 reacquire protocol diagnostics ----------------------------
+  bool in_probation = false;      // speed capped; completion must say no
+  int reacquire_count = 0;        // lifetime reacquire events (never reset)
+  bool reacquire_seeking = false; // decel-to-zero cycle, no QP
 };
 
 class LinearMpcController
@@ -45,6 +50,11 @@ public:
   // A5 diagnostics for tests/audits
   double acceptedArc() const { return gate_.accepted_arc; }
   int rejectRun() const { return reject_run_; }
+  // A4.2 diagnostics for tests/audits
+  bool inSeeking() const { return reacq_.inSeeking(); }
+  bool inProbation() const { return reacq_.inProbation(); }
+  int reacquireCount() const { return reacq_.reacquire_events; }
+  const ReacquireState & reacquire() const { return reacq_; }
 
 private:
   double maxConstraintViolation(const Eigen::Vector4d & x0,
@@ -65,6 +75,8 @@ private:
   ProjectionGateState gate_;
   bool gate_initialized_ = false;
   int reject_run_ = 0;
+  // ---- A4.2 reacquire protocol state (mirror of mpc.py) -----------------
+  ReacquireState reacq_;
 };
 
 }  // namespace linear_mpc_controller

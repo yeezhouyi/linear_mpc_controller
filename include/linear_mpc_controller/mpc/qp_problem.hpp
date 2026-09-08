@@ -37,6 +37,10 @@ struct MpcParams
   double back_m = 0.08;
   int max_reject_run = 5;
   double v_probation = 0.15;
+  // ---- A4.2 reacquire protocol (numeric copies of types.py) ------------
+  int probation_steps = 20;           // observation window after commit
+  int reacquire_stable_steps = 3;     // consecutive same-seg beats to commit
+  int reacquire_timeout_steps = 40;   // seeking timeout -> PROJECTION_LOST
   // ---- A2 windowed projection defaults --------------------------------
   double fwd_m = 0.30;
   double reacquire_m = 1.00;

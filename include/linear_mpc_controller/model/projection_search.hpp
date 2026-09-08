@@ -9,14 +9,17 @@
 //   * stage 3 when the gate rejects every segment or a genuine no-s_prev tie
 //     exists -- NO unconstrained global-argmin fallback (fail-open closed);
 //   * ties within tie_eps resolve toward s_prev in arc.
-// NOTE (recorded): the Python side later added same-lane micro-segment
-// collapse refinements for 0.02 m-sampled dense paths; this C++ mirror keeps
-// the doc semantics and is exercised on poses where the two agree (off-vertex
-// interiors and gate cases); parity of the FULL Python refinements is a
-// tracked A5B follow-up.
+// NOTE: the Python side's same-place foot collapse (R5/R6) and arc-
+// contiguity run partition are ported here so the C++ mirror reproduces the
+// SIGNED-IN golden on cusp / fold / straight_jump geometries.  The tie
+// resolution is: (1) argmin dist2; (2) same-place feet (within 2*tie_eps)
+// collapse to the best; (3) arc-contiguity run partition (span/median gap)
+// -- a single run or same-direction runs collapse to the best; (4) genuine
+// cross-direction runs resolve toward s_prev if present, else refuse (-2).
 #ifndef LINEAR_MPC_CONTROLLER__MODEL__PROJECTION_SEARCH_HPP_
 #define LINEAR_MPC_CONTROLLER__MODEL__PROJECTION_SEARCH_HPP_
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <limits>
@@ -132,7 +135,10 @@ inline WindowedProjection closestPointWindowed(
     }
   }
 
-  // pick among candidate segment indices: min dist2, tie -> nearest s_prev
+  // pick among candidate segment indices: faithful mirror of mpc_core.frenet
+  // _pick -- argmin dist2, then the R5/R6 tie resolution.  Returns a segment
+  // index in cand, or -2 on a genuine cross-lane tie with no s_prev state
+  // (caller maps -2 / out-of-window to stage 3: refuse, fail-open closed).
   auto pick = [&](const std::vector<std::size_t> & idx, int & cand) -> void {
     cand = -1;
     if (idx.empty()) {
@@ -157,44 +163,142 @@ inline WindowedProjection closestPointWindowed(
       cand = static_cast<int>(near_v[0]);
       return;
     }
-    // RECORDED: same-lane collapse (mirror of the Python _pick refinement).
-    // On dense (0.02 m) samplings the eps band always contains the same-lane
-    // micro-segments around the foot (their clamped feet lie within tie_eps
-    // of the best distance), so a raw tie resolution would lag the anchor by
-    // up to one sample forever.  Candidates whose tangent differs from the
-    // best by <= 0.05 rad collapse to the single best; only genuinely
-    // different-lane candidates (antiparallel / neighbouring lanes) reach
-    // the s_prev / stage-3 path.
-    const double lane_rad = 0.05;
-    std::vector<std::size_t> cross;
-    for (const auto i : near_v) {
-      double dpsi = std::fmod(seg_yaw[i] - seg_yaw[best_i] + kPi, 2.0 * kPi);
-      if (dpsi < 0.0) {
-        dpsi += 2.0 * kPi;
-      }
-      dpsi -= kPi;
-      if (std::fabs(dpsi) > lane_rad) {
-        cross.push_back(i);
+    // j = argmin within the near band (first occurrence on ties)
+    std::size_t j = 0;
+    double jd = dist2[near_v[0]];
+    for (std::size_t k = 1; k < near_v.size(); ++k) {
+      if (dist2[near_v[k]] < jd) {
+        jd = dist2[near_v[k]];
+        j = k;
       }
     }
-    if (cross.empty()) {
-      cand = static_cast<int>(best_i);   // single lane: argmin best
+    // (1) same-place collapse: candidates whose feet coincide (within
+    // 2*tie_eps) are the SAME physical point -- e.g. a cusp where the
+    // forward and reverse strands meet.  Return the argmin best.
+    {
+      bool same_place = true;
+      for (const auto i : near_v) {
+        const double fdx = proj_x[i] - proj_x[near_v[j]];
+        const double fdy = proj_y[i] - proj_y[near_v[j]];
+        if (std::hypot(fdx, fdy) > 2.0 * tie_eps_m) {
+          same_place = false;
+          break;
+        }
+      }
+      if (same_place) {
+        cand = static_cast<int>(near_v[j]);
+        return;
+      }
+    }
+    // (2) arc-contiguity run partition: a single contiguous arc run (one
+    // lane) collapses to the best; several runs separated by an arc gap are
+    // genuinely different places/lanes.  Thresholds scale with the span and
+    // the median intra-run spacing so a 2-strand tie is NOT misread as a
+    // break (matches Python's lenient span/median gap logic).
+    std::vector<double> arcs_n;
+    arcs_n.reserve(near_v.size());
+    for (const auto i : near_v) {
+      arcs_n.push_back(traj[i].s + along[i]);
+    }
+    std::vector<std::size_t> order(arcs_n.size());
+    for (std::size_t k = 0; k < order.size(); ++k) {
+      order[k] = k;
+    }
+    std::sort(order.begin(), order.end(),
+              [&](std::size_t a, std::size_t b) { return arcs_n[a] < arcs_n[b]; });
+    std::vector<double> sorted_arcs;
+    sorted_arcs.reserve(arcs_n.size());
+    for (const auto o : order) {
+      sorted_arcs.push_back(arcs_n[o]);
+    }
+    std::vector<double> gap;
+    for (std::size_t k = 1; k < sorted_arcs.size(); ++k) {
+      gap.push_back(sorted_arcs[k] - sorted_arcs[k - 1]);
+    }
+    const double span = sorted_arcs.empty()
+                          ? 0.0
+                          : (sorted_arcs.back() - sorted_arcs.front());
+    const double run_break_thr =
+      std::max(0.05, 4.0 * span / static_cast<double>(std::max<std::size_t>(
+                                    near_v.size() - 1, 1)));
+    double med = 0.0;
+    if (!gap.empty()) {
+      std::vector<double> gs = gap;
+      std::sort(gs.begin(), gs.end());
+      if (gs.size() % 2 == 1) {
+        med = gs[gs.size() / 2];
+      } else {
+        med = 0.5 * (gs[gs.size() / 2 - 1] + gs[gs.size() / 2]);
+      }
+    }
+    const double break_thr = std::max(0.05, 5.0 * med);
+    bool any_break = false;
+    for (const double gv : gap) {
+      if (gv > break_thr) {
+        any_break = true;
+        break;
+      }
+    }
+    if (!any_break) {
+      cand = static_cast<int>(near_v[j]);   // single run -> argmin best
       return;
     }
-    near_v.clear();
-    near_v.push_back(best_i);            // keep the same-lane best + cross lanes
-    for (const auto i : cross) {
-      near_v.push_back(i);
+    // (3) multiple runs: keep one representative (argmin) per run, decide by
+    // travel direction.  Mirror Python's order[rs:] slice (to end) so reps
+    // match exactly.
+    std::vector<std::size_t> run_starts;
+    run_starts.push_back(0);
+    for (std::size_t k = 0; k < gap.size(); ++k) {
+      if (gap[k] > break_thr) {
+        run_starts.push_back(k + 1);
+      }
     }
+    std::vector<std::size_t> reps;
+    std::vector<double> rep_angles;
+    for (std::size_t r = 0; r < run_starts.size(); ++r) {
+      const std::size_t rs = run_starts[r];
+      std::size_t bk = rs;
+      double bd = dist2[near_v[order[rs]]];
+      for (std::size_t k = rs + 1; k < order.size(); ++k) {
+        const std::size_t seg = near_v[order[k]];
+        if (dist2[seg] < bd) {
+          bd = dist2[seg];
+          bk = k;
+        }
+      }
+      reps.push_back(near_v[order[bk]]);
+      rep_angles.push_back(seg_yaw[near_v[order[bk]]]);
+    }
+    bool same_dir = true;
+    for (std::size_t a = 0; a < rep_angles.size() && same_dir; ++a) {
+      for (std::size_t b = a + 1; b < rep_angles.size(); ++b) {
+        double dpsi = std::fmod(rep_angles[a] - rep_angles[b] + kPi,
+                                2.0 * kPi);
+        if (dpsi < 0.0) {
+          dpsi += 2.0 * kPi;
+        }
+        dpsi -= kPi;
+        if (std::fabs(dpsi) > 0.52) {   // ~30 deg: different direction
+          same_dir = false;
+          break;
+        }
+      }
+    }
+    if (same_dir) {
+      cand = static_cast<int>(near_v[j]);   // same direction -> argmin
+      return;
+    }
+    // (4) genuine cross-direction runs: resolve toward s_prev if we have
+    // state, otherwise refuse (caller maps to stage 3).
     if (s_prev >= 0.0) {
-      // resolve toward s_prev in arc (cross-lane tie with state)
-      std::size_t best_tie = near_v[0];
-      double best_ds = std::fabs((traj[near_v[0]].s + along[near_v[0]]) - s_prev);
-      for (const auto i : near_v) {
-        const double ds = std::fabs((traj[i].s + along[i]) - s_prev);
+      std::size_t best_tie = reps[0];
+      double best_ds = std::fabs((traj[reps[0]].s + along[reps[0]]) - s_prev);
+      for (std::size_t k = 1; k < reps.size(); ++k) {
+        const double ds =
+          std::fabs((traj[reps[k]].s + along[reps[k]]) - s_prev);
         if (ds < best_ds) {
           best_ds = ds;
-          best_tie = i;
+          best_tie = reps[k];
         }
       }
       cand = static_cast<int>(best_tie);

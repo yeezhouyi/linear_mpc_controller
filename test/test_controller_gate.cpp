@@ -61,13 +61,41 @@ int main()
     std::printf("FAIL reject speed cap: v_cmd=%.6f\n", rj.v_cmd);
     return 1;
   }
-  // -- persistent rejection exceeds max_reject_run -> PROJECTION_LOST -------
-  MpcCycleResult rlost;
-  for (int i = 0; i < params.max_reject_run + 2; ++i) {
-    rlost = ctrl.computeCycle(4.0, 0.0, 0.0, 0.4, 0.0);
+  // -- A4.2: persistent rejection enters SEEKING and commits the TRUE arc --
+  // Mirrors mpc_core/tests/test_a51_gate.py::
+  //   test_reacquire_recovers_committed_baseline_then_normal
+  // The old C++ expectation ("persistent rejection -> PROJECTION_LOST
+  // immediately") belonged to the pre-A4.2 subset: once the full protocol is
+  // wired, a STABLE pose is not lost, it is re-acquired.
+  bool saw_seeking = false;
+  MpcCycleResult rpark;
+  for (int i = 0; i < 60; ++i) {           // robot parked at 4.0
+    rpark = ctrl.computeCycle(4.0, 0.0, 0.0, 0.4, 0.0);
+    if (rpark.reason == "REACQUIRE_SEEKING") {
+      saw_seeking = true;
+    }
   }
-  if (!(rlost.health == HealthState::EMERGENCY_STOP && rlost.reason == "PROJECTION_LOST")) {
-    std::printf("FAIL lost: health=%d reason=%s\n", (int)rlost.health, rlost.reason.c_str());
+  if (!saw_seeking) {
+    std::printf("FAIL reacquire: never entered A4.2 seeking\n");
+    return 1;
+  }
+  if (!approx(ctrl.acceptedArc(), 4.0, 1e-6)) {
+    std::printf("FAIL reacquire commit: acc=%.6f (want 4.0)\n", ctrl.acceptedArc());
+    return 1;
+  }
+  if (ctrl.inProbation()) {
+    std::printf("FAIL reacquire: probation should have expired after 60 cycles\n");
+    return 1;
+  }
+  if (ctrl.reacquireCount() < 1) {
+    std::printf("FAIL reacquire: no reacquire event recorded\n");
+    return 1;
+  }
+  // and tracking continues forward from the committed baseline
+  MpcCycleResult rfwd = ctrl.computeCycle(4.04, 0.0, 0.0, 0.4, 0.0);
+  if (!(rfwd.health == HealthState::OK && approx(ctrl.acceptedArc(), 4.04, 1e-6))) {
+    std::printf("FAIL post-reacquire track: health=%d acc=%.6f\n",
+      (int)rfwd.health, ctrl.acceptedArc());
     return 1;
   }
   // -- new reference resets the gate ----------------------------------------

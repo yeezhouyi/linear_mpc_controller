@@ -53,6 +53,15 @@ if(BUILD_TESTING)
   add_executable(test_controller_gate test/test_controller_gate.cpp)
   target_link_libraries(test_controller_gate PRIVATE linear_mpc_core)
   add_test(NAME controller_gate COMMAND test_controller_gate)
+  add_executable(test_reacquire test/test_reacquire.cpp)
+  target_link_libraries(test_reacquire PRIVATE linear_mpc_core)
+  add_test(NAME reacquire COMMAND test_reacquire)
+  # A5B.4: C++ consumer of the signed-in projection golden (A7.2 #5).
+  add_executable(projection_golden_dump tools/projection_golden_dump.cpp)
+  target_link_libraries(projection_golden_dump PRIVATE linear_mpc_core)
+  add_test(NAME projection_golden
+    COMMAND ${Python3_EXECUTABLE}
+      ${CMAKE_CURRENT_SOURCE_DIR}/tools/check_projection_golden.py)
   add_executable(test_projection_search test/test_projection_search.cpp)
   target_link_libraries(test_projection_search PRIVATE linear_mpc_core)
   add_test(NAME projection_search COMMAND test_projection_search)
