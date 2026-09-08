@@ -5,10 +5,12 @@ Publishes odom (nav_msgs/Odometry) + tf (odom->base_link) integrated from
 the incoming velocity command, so a Nav2 controller_server + plugin can be
 exercised without Gazebo.
 
-Jazzy pitfall (B6B spec): the controller_server may emit TwistStamped OR
-(un)Twist depending on configuration -- a fake robot that subscribes to the
-wrong flavour silently never moves.  This node subscribes to BOTH and uses
-whichever has data in the last 0.1 s.
+cmd_vel type is PINNED, never probed (B6B review): controller_server.yaml
+sets enable_stamped_cmd_vel: false, so the server publishes plain
+geometry_msgs/Twist and this node subscribes Twist.  Probing is forbidden --
+`ros2 topic info` aggregates endpoints by topic name, so it reports
+"Subscription count: 1" even when the concrete-type publisher never matches
+(get_subscription_count() stays 0 and publishVelocity silently gates).
 """
 import math
 import threading
@@ -17,11 +19,10 @@ import time
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, DurabilityPolicy
-from geometry_msgs.msg import Twist, TwistStamped
+from geometry_msgs.msg import Twist, TransformStamped
 from nav_msgs.msg import Odometry, OccupancyGrid
 from std_msgs.msg import Header
 from tf2_ros import TransformBroadcaster
-from geometry_msgs.msg import TransformStamped
 
 
 class SandboxRobot(Node):
@@ -40,30 +41,16 @@ class SandboxRobot(Node):
         self.lock = threading.Lock()
         self.v = 0.0
         self.w = 0.0
-        self.v_ts_t = 0.0
-        self.w_ts_t = 0.0
         self.robot_x = self.get_parameter("start_x").value
         self.robot_y = self.get_parameter("start_y").value
         self.robot_yaw = self.get_parameter("start_yaw").value
         self.now = self.get_clock().now()
 
-        # Subscribe the cmd_vel flavour that actually exists -- publishing
-        # Twist AND TwistStamped on one topic makes the RMW complain about
-        # type mismatches and pollutes debugging.  Probe the topic type
-        # unless the caller pins it explicitly with cmd_vel_type:=.
-        self.declare_parameter("cmd_vel_type", "")   # "" = auto-probe
-        ctype = self.get_parameter("cmd_vel_type").value
-        if not ctype:
-            ctype = self._probe_type()
-
-        if ctype == "TwistStamped":
-            self.sub = self.create_subscription(
-                TwistStamped, "/cmd_vel", self.cb_ts, 10)
-            self.get_logger().info("subscribing /cmd_vel TwistStamped")
-        else:
-            self.sub = self.create_subscription(
-                Twist, "/cmd_vel", self.cb_tw, 10)
-            self.get_logger().info("subscribing /cmd_vel Twist")
+        # Pinned: plain Twist (controller_server yaml pins
+        # enable_stamped_cmd_vel: false).  No auto-probe, no dual subscribe.
+        self.sub = self.create_subscription(
+            Twist, "/cmd_vel", self.cb_tw, 10)
+        self.get_logger().info("subscribing /cmd_vel geometry_msgs/Twist (pinned)")
 
         self.odom_pub = self.create_publisher(Odometry, "/odom", 10)
         self.tf_br = TransformBroadcaster(self)
@@ -89,35 +76,10 @@ class SandboxRobot(Node):
         self.get_logger().info("sandbox robot up (rate %.0f Hz)" % rate)
         self.timer = self.create_timer(self.period, self.step)
 
-    def _probe_type(self):
-        import subprocess
-        try:
-            out = subprocess.run(
-                ["ros2", "topic", "info", "/cmd_vel", "-t"],
-                capture_output=True, text=True, timeout=10).stdout
-            for ln in out.splitlines():
-                if "Type:" in ln:
-                    return ln.split(":")[-1].strip().split("/")[-1]
-        except Exception:
-            pass
-        # Jazzy controller_server default is TwistStamped
-        return "TwistStamped"
-
-    def cb_ts(self, msg: TwistStamped):
-        with self.lock:
-            self.v = msg.twist.linear.x
-            self.w = msg.twist.angular.z
-            self.v_ts_t = time.monotonic()
-        if not hasattr(self, "_got"):
-            self._got = True
-            self.get_logger().info(
-                "FIRST cmd_vel TwistStamped: v=%.3f w=%.3f" % (self.v, self.w))
-
     def cb_tw(self, msg: Twist):
         with self.lock:
             self.v = msg.linear.x
             self.w = msg.angular.z
-            self.w_ts_t = time.monotonic()
         if not hasattr(self, "_got"):
             self._got = True
             self.get_logger().info(

@@ -3,6 +3,12 @@
 #   stage 1 : lifecycle configure/activate loads the plugin (pluginlib)
 #   stage 2a: straight path, start on path
 #   stage 2b: quarter-circle arc, OFFLINE start (steering must be excited)
+#
+# Sequencing discipline (B6B review): the runner NEVER drives the stack
+# through ros2 CLI (lifecycle/action/topic all sit on the daemon whose graph
+# cache makes readiness answers stale).  It only starts processes; the smoke
+# script does configure/activate/plugin-assert via typed in-process service
+# clients and waits for the action server via rclpy ActionClient.
 set -u
 WS=/home/zhouyi/lmpc_ws
 REPO=$WS/src/linear_mpc_controller
@@ -41,34 +47,10 @@ run_stage() {
   ros2 run nav2_controller controller_server \
     --ros-args --params-file "$CFG" > "$LOG" 2>&1 &
   SERVER_PID=$!
-  if [ "$stage" = "1" ]; then
-    # stage 1 drives the lifecycle itself (pluginlib load on configure)
-    sleep 3
-  else
-    # stages 2a/2b: bring the server active, then wait for the action server
-    ros2 lifecycle set /controller_server configure >/dev/null 2>&1 || true
-    sleep 2
-    ros2 lifecycle set /controller_server activate >/dev/null 2>&1 || true
-  fi
-  # wait for the FollowPath action server (stage 1 creates it inside the
-  # smoke, so only 2a/2b wait here)
-  local up=0
-  if [ "$stage" != "1" ]; then
-    for i in $(seq 1 60); do
-      if ros2 action list 2>/dev/null | grep -q follow_path; then
-        up=1; break
-      fi
-      sleep 1
-    done
-  else
-    up=1
-  fi
-  if [ "$up" != 1 ]; then
-    echo "B6B stage $stage: controller_server FollowPath action not up"
-    tail -20 "$LOG"
-    kill -9 $ROBOT_PID $SERVER_PID 2>/dev/null || true
-    return 1
-  fi
+  # Give the server a moment to spin its lifecycle + action services up;
+  # the smoke script then waits in-process (ChangeState/GetState services,
+  # ActionClient.wait_for_server) so no daemon-cached readiness is trusted.
+  sleep 4
   echo "##### B6B stage $stage: smoke #####"
   python3 "$REPO/scripts/nav2_plugin_smoke.py" --stage "$stage"
   local rc=$?

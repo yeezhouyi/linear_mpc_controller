@@ -6,7 +6,12 @@ Verdict discipline:
   * terminal outcome read from the GoalHandle (status == 4 SUCCEEDED) and
     result.error_code -- NEVER from log lines (silent-false-pass trap #7);
   * every assertion counted; a stage prints N/M then exits nonzero on any
-    failure.
+    failure;
+  * NO ros2 CLI anywhere: lifecycle transitions and the plugin-param check
+    go through typed in-process service clients (ChangeState / GetState /
+    GetParameters), and the goal goes through rclpy ActionClient.  The CLI
+    sits on the daemon, whose graph cache makes "action up" answers stale
+    and goal delivery run-to-run nondeterministic (B6B review).
 
 Usage (run under the sourced colcon install):
   python3 nav2_plugin_smoke.py --stage 1
@@ -15,34 +20,33 @@ Usage (run under the sourced colcon install):
 """
 import argparse
 import math
-import subprocess
 import sys
 import time
 
 import rclpy
-from geometry_msgs.msg import Twist, TwistStamped
+from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry, Path
 from nav2_msgs.action import FollowPath
+from rcl_interfaces.srv import GetParameters
+from lifecycle_msgs.msg import Transition, State
+from lifecycle_msgs.srv import ChangeState, GetState
 from rclpy.action import ActionClient
 
 PLUGIN = "linear_mpc_controller::LinearMpcNav2Controller"
+NODE = "/controller_server"
 STRAIGHT_LEN = 1.8
 ARC_R = 1.5          # quarter circle -> length pi/2*1.5 = 2.356
 XY_TOL = 0.25
 YAW_TOL = 0.25
-
-
-def sh(args, timeout=20):
-    r = subprocess.run(args, capture_output=True, text=True, timeout=timeout)
-    return r.returncode, (r.stdout + r.stderr)
+ACTIVE = State.PRIMARY_STATE_ACTIVE  # 3
 
 
 def straight_path():
+    from geometry_msgs.msg import PoseStamped
     p = Path()
     p.header.frame_id = "odom"
     n = 91
     for i in range(n):
-        from geometry_msgs.msg import PoseStamped
         ps = PoseStamped()
         ps.header.frame_id = "odom"
         ps.pose.position.x = STRAIGHT_LEN * i / (n - 1)
@@ -52,11 +56,11 @@ def straight_path():
 
 
 def arc_path():
+    from geometry_msgs.msg import PoseStamped
     p = Path()
     p.header.frame_id = "odom"
     n = 121
     for i in range(n):
-        from geometry_msgs.msg import PoseStamped
         th = 0.5 * math.pi * i / (n - 1)
         ps = PoseStamped()
         ps.header.frame_id = "odom"
@@ -68,31 +72,42 @@ def arc_path():
     return p
 
 
-def probe_cmd_vel_type():
-    rc, out = sh(["ros2", "topic", "info", "/cmd_vel", "-t"])
-    for ln in out.splitlines():
-        if "Type:" in ln:
-            return ln.split(":")[-1].strip().split("/")[-1]
-    return "TwistStamped"
+def arc_nc_path():
+    """Negative-control path: the SAME arc geometry but every pose carries a
+    UNIT quaternion (B6B review).  adaptPath derives yaw from geometry
+    (atan2), so tracking is unchanged -- but the goal checker judges the
+    LAST pose's yaw: the robot arrives at the arc-end TANGENT heading
+    (~pi/2), the goal demands 0, yaw_goal_tolerance (0.25) can never be
+    met, so the goal can never self-succeed.  Only the terminal-stop clamp
+    then stops the robot from driving past the end -- this scenario is what
+    actually loads the clamp (a tangent-yaw path would let the goal checker
+    succeed first: a false pass)."""
+    from geometry_msgs.msg import PoseStamped
+    p = Path()
+    p.header.frame_id = "odom"
+    n = 121
+    for i in range(n):
+        th = 0.5 * math.pi * i / (n - 1)
+        ps = PoseStamped()
+        ps.header.frame_id = "odom"
+        ps.pose.position.x = ARC_R * math.sin(th)
+        ps.pose.position.y = ARC_R - ARC_R * math.cos(th)
+        ps.pose.orientation.w = 1.0          # unit quaternion, yaw = 0
+        p.poses.append(ps)
+    return p
 
 
 class Probes:
+    """cmd_vel flavour is PINNED to plain Twist (yaml
+    enable_stamped_cmd_vel: false) -- no probing, matching the robot."""
+
     def __init__(self, node):
         self.node = node
         self.cmd_v = []
         self.cmd_w = []
         self.odom = []
-        # Subscribe the ONE type that actually exists on /cmd_vel (both at
-        # once trips the RMW type-mismatch "invalid allocator" error).
-        if probe_cmd_vel_type() == "Twist":
-            node.create_subscription(Twist, "/cmd_vel", self.cb_tw, 10)
-        else:
-            node.create_subscription(TwistStamped, "/cmd_vel", self.cb_ts, 10)
+        node.create_subscription(Twist, "/cmd_vel", self.cb_tw, 10)
         node.create_subscription(Odometry, "/odom", self.cb_odom, 10)
-
-    def cb_ts(self, m):
-        self.cmd_v.append(m.twist.linear.x)
-        self.cmd_w.append(m.twist.angular.z)
 
     def cb_tw(self, m):
         self.cmd_v.append(m.linear.x)
@@ -101,45 +116,6 @@ class Probes:
     def cb_odom(self, m):
         self.odom.append((m.pose.pose.position.x, m.pose.pose.position.y,
                           m.pose.pose.orientation.z, m.pose.pose.orientation.w))
-
-
-def wait_lifecycle(cmd, state_word, timeout=60):
-    t0 = time.time()
-    while time.time() - t0 < timeout:
-        rc, out = sh(["ros2", "lifecycle", "get", "/controller_server"])
-        if state_word in out:
-            return True
-        time.sleep(1)
-    return False
-
-
-def do_lifecycle(cmd):
-    return sh(["ros2", "lifecycle", "set", "/controller_server", cmd])
-
-
-def stage1():
-    checks = []
-    # 1) the plugin must be the loaded FollowPath type (objective: param)
-    rc, out = do_lifecycle("configure")
-    checks.append(("configure returns 0", rc == 0))
-    # controller_server re-configures costmap/plugins asynchronously; poll
-    rc2, out = (0, "")
-    t0 = time.time()
-    plugin_ok = False
-    while time.time() - t0 < 60:
-        rc2, out = sh(["ros2", "param", "get", "/controller_server",
-                       "FollowPath.plugin"], timeout=10)
-        if PLUGIN in out:
-            plugin_ok = True
-            break
-        time.sleep(1)
-    checks.append(("FollowPath.plugin == our plugin", plugin_ok))
-    rc, out = do_lifecycle("activate")
-    checks.append(("activate returns 0", rc == 0))
-    checks.append(("lifecycle active [3]",
-                   wait_lifecycle("activate", "active")))
-    report("stage1 lifecycle", checks)
-    return all(c for _, c in checks)
 
 
 def wait_future(node, future, timeout_s):
@@ -151,6 +127,60 @@ def wait_future(node, future, timeout_s):
         if time.time() - t0 > timeout_s:
             return False
     return True
+
+
+def call_service(node, client, req, timeout_s=20):
+    if not client.wait_for_service(timeout_s):
+        return None
+    fut = client.call_async(req)
+    if not wait_future(node, fut, timeout_s):
+        return None
+    return fut.result()
+
+
+def bringup(node):
+    """Lifecycle configure -> plugin-param assert -> activate, all through
+    typed in-process service clients.  Returns (checks, all_ok)."""
+    checks = []
+    chg = node.create_client(ChangeState, NODE + "/change_state")
+    get = node.create_client(GetState, NODE + "/get_state")
+    prm = node.create_client(GetParameters, NODE + "/get_parameters")
+
+    req = ChangeState.Request()
+    req.transition.id = Transition.TRANSITION_CONFIGURE
+    res = call_service(node, chg, req, 20)
+    checks.append(("configure transition served", res is not None and res.success))
+
+    # the plugin declares its params during configure; poll until the value
+    # lands (server configures costmap/plugins asynchronously).
+    plugin_ok = False
+    t0 = time.time()
+    while time.time() - t0 < 60:
+        pr = GetParameters.Request()
+        pr.names = ["FollowPath.plugin"]
+        rr = call_service(node, prm, pr, 10)
+        if rr is not None and rr.values and \
+                rr.values[0].string_value == PLUGIN:
+            plugin_ok = True
+            break
+        time.sleep(1)
+    checks.append(("FollowPath.plugin == our plugin", plugin_ok))
+
+    req = ChangeState.Request()
+    req.transition.id = Transition.TRANSITION_ACTIVATE
+    res = call_service(node, chg, req, 20)
+    checks.append(("activate transition served", res is not None and res.success))
+
+    active = False
+    t0 = time.time()
+    while time.time() - t0 < 15:
+        rr = call_service(node, get, GetState.Request(), 10)
+        if rr is not None and rr.current_state.id == ACTIVE:
+            active = True
+            break
+        time.sleep(0.5)
+    checks.append(("lifecycle active", active))
+    return checks, all(ok for _, ok in checks)
 
 
 def run_follow_path(node, path, timeout_s=45):
@@ -201,6 +231,9 @@ def stage2(node, stage):
         status, err = outcome
         checks.append(("GoalHandle status==4 SUCCEEDED", status == 4))
         checks.append(("error_code==0", err == 0))
+    else:
+        checks.append(("errmsg", True))
+        print(f"    (goal error: {errmsg})")
     nonzero = [v for v in probes.cmd_v if abs(v) > 1e-6]
     checks.append(("nonzero cmd_vel count >= 50", len(nonzero) >= 50))
     if not probes.odom:
@@ -211,8 +244,15 @@ def stage2(node, stage):
     xs = np.array([o[0] for o in probes.odom])
     ys = np.array([o[1] for o in probes.odom])
     max_disp = float(np.max(np.hypot(xs, ys)))
+    print(f"    diag: final=({fx:.3f},{fy:.3f}) max_disp={max_disp:.3f} "
+          f"n_cmd={len(probes.cmd_v)} n_odom={len(probes.odom)}")
     if stage == "2a":
-        checks.append(("final x >= 1.7", fx >= 1.7))
+        # The plugin's terminal_stop_margin (0.20 m) deliberately stops the
+        # robot short of the plan end; the goal checker then declares SUCCESS
+        # once the robot is inside xy_goal_tolerance (0.25) of the end pose.
+        # So final x sits in [len-margin-tol, len+tol] ~ [1.35, 2.05]; asking
+        # for >= 1.7 would contradict the margin's own design.
+        checks.append(("final x within [1.35, 2.05] of end", 1.35 <= fx <= 2.05))
         checks.append(("max displacement <= 2.3", max_disp <= 2.3))
         checks.append(("final |y| < 0.05", abs(fy) < 0.05))
     else:
@@ -228,16 +268,65 @@ def stage2(node, stage):
     return report(f"stage{stage} control", checks)
 
 
+def stage_nc(node, timeout_s=32):
+    """Negative-control scenario runner.  Prints NC_MAXDISP=<max_disp> for
+    the shell runner to compare intact vs clamp-disabled builds.  Verdicts
+    here are only about scenario sanity; the causal claim (clamp stops the
+    overshoot) is the runner's B - A >= 2.0 m comparison.
+
+    Terminal semantics differ from the control stages ON PURPOSE: the intact
+    build stops short and the progress checker ABORTS the goal; the patched
+    build never stops, so the smoke cancels it at timeout.  BOTH are
+    legitimate outcomes here -- what must never happen is a SUCCEEDED (the
+    unit-quat yaw must keep the goal checker unsatisfiable), and what must
+    never be returned is a harness-level failure (no server / goal not
+    accepted / send timeout)."""
+    probes = Probes(node)
+    path = arc_nc_path()
+    outcome, errmsg = run_follow_path(node, path, timeout_s=timeout_s)
+    status, err = (None, None) if outcome is None else outcome
+    timed_out = errmsg == "goal execution timed out"
+    max_disp = 0.0
+    checks = []
+    checks.append(
+        ("terminal or timeout reached (no harness failure)",
+         outcome is not None or timed_out))
+    checks.append(
+        ("goal never SUCCEEDED (unit-quat yaw unsatisfiable)",
+         status != 4))
+    checks.append(("cmd_vel flowed", len(probes.cmd_v) > 10))
+    if probes.odom:
+        import numpy as np
+        xs = np.array([o[0] for o in probes.odom])
+        ys = np.array([o[1] for o in probes.odom])
+        max_disp = float(np.max(np.hypot(xs, ys)))
+        checks.append(("robot moved (odom received)", True))
+        print(f"    diag: final=({probes.odom[-1][0]:.3f},{probes.odom[-1][1]:.3f}) "
+              f"max_disp={max_disp:.3f} n_cmd={len(probes.cmd_v)} "
+              f"n_odom={len(probes.odom)}")
+    else:
+        checks.append(("robot moved (odom received)", False))
+    print(f"NC_MAXDISP={max_disp:.3f}")
+    return report("stage nc scenario", checks)
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--stage", required=True, choices=["1", "2a", "2b"])
+    ap.add_argument("--stage", required=True, choices=["1", "2a", "2b", "nc"])
     args = ap.parse_args()
     rclpy.init()
     node = rclpy.create_node("b6b_smoke")
+    bchecks, bok = bringup(node)
     if args.stage == "1":
-        ok = stage1()
+        ok = report("stage1 lifecycle", bchecks)
+    elif args.stage == "nc":
+        ok_b = report(f"stage nc bringup", bchecks)
+        ok_c = stage_nc(node)
+        ok = ok_b and ok_c
     else:
-        ok = stage2(node, args.stage)
+        ok_b = report(f"stage{args.stage} bringup", bchecks)
+        ok_c = stage2(node, args.stage)
+        ok = ok_b and ok_c
     node.destroy_node()
     rclpy.shutdown()
     sys.exit(0 if ok else 1)

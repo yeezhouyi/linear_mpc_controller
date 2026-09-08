@@ -16,6 +16,11 @@ controller_server:
     failure_tolerance: 0.3
     odom_topic: "/odom"
     cmd_vel_topic: "/cmd_vel"
+    # Pin the OUTGOING cmd_vel type explicitly (B6B review): the parameter is
+    # the only authority -- `ros2 topic info` aggregates endpoints by topic
+    # name and silently lies about type compatibility.  false => the server
+    # publishes geometry_msgs/Twist and the sandbox robot subscribes Twist.
+    enable_stamped_cmd_vel: false
     publish_zero_velocity: True
     progress_checker_plugins: ["progress_checker"]
     goal_checker_plugins: ["general_goal_checker"]
