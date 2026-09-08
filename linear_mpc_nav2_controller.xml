@@ -1,0 +1,12 @@
+<library path="linear_mpc_nav2_controller">
+  <class name="linear_mpc_controller::LinearMpcNav2Controller"
+         type="linear_mpc_controller::LinearMpcNav2Controller"
+         base_class_type="nav2_core::Controller">
+    <description>
+      B6B: Nav2 controller_server plugin wrapping the linear MPC core.
+      Trajectory tracker only (no obstacle reading). Frame discipline:
+      robot pose is transformed into the path frame each cycle so the
+      A5.1/A5.2 projection gate state is never reset per cycle.
+    </description>
+  </class>
+</library>

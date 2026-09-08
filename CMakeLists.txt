@@ -29,6 +29,9 @@ add_library(linear_mpc_core
   src/mpc/qp_problem.cpp
   src/mpc/linear_mpc.cpp
 )
+# B6B: a static core linked into a SHARED pluginlib needs PIC, otherwise the
+# linker fails with "relocation R_X86_64_PC32 ... recompile with -fPIC".
+set_target_properties(linear_mpc_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 if(LINEAR_MPC_WITH_OSQP)
   target_sources(linear_mpc_core PRIVATE src/mpc/osqp_solver.cpp)
 endif()
@@ -98,6 +101,27 @@ if(ament_cmake_FOUND)
   target_include_directories(velocity_arbiter_node PRIVATE include ros2)
   ament_target_dependencies(velocity_arbiter_node rclcpp geometry_msgs)
   install(TARGETS velocity_arbiter_node DESTINATION lib/${PROJECT_NAME})
+
+  # ---- B6B: Nav2 controller_server plugin -----------------------------
+  find_package(nav2_core REQUIRED)
+  find_package(pluginlib REQUIRED)
+  find_package(nav2_util REQUIRED)
+  find_package(tf2_ros REQUIRED)
+  find_package(nav2_costmap_2d REQUIRED)
+  find_package(nav_msgs REQUIRED)
+
+  add_library(linear_mpc_nav2_controller SHARED
+    ros2/nav2_mpc_controller.cpp
+    ros2/trajectory_adapter.cpp)
+  target_include_directories(linear_mpc_nav2_controller PRIVATE include ros2)
+  target_link_libraries(linear_mpc_nav2_controller linear_mpc_core)
+  ament_target_dependencies(linear_mpc_nav2_controller
+    rclcpp nav2_core nav2_util nav2_costmap_2d pluginlib tf2_ros geometry_msgs nav_msgs)
+  pluginlib_export_plugin_description_file(nav2_core linear_mpc_nav2_controller.xml)
+  install(TARGETS linear_mpc_nav2_controller
+    LIBRARY DESTINATION lib
+    ARCHIVE DESTINATION lib
+    RUNTIME DESTINATION bin)
 
   find_package(ament_cmake_python QUIET)
   if(ament_cmake_python_FOUND)
