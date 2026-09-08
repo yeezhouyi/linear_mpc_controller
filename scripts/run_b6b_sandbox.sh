@@ -26,8 +26,11 @@ LOG=/tmp/b6b_controller.log
 #   * the sandbox robot is identified by its unique script name;
 #   * processes on this shell's own ancestor chain are always skipped;
 #   * the user's `ros2 daemon` is NEVER touched (no CLI is used anymore).
+# is_self_ancestor PID SELF: true when PID sits on the ancestor chain of
+# the shell whose pid is SELF (two explicit args -- never borrow via dynamic
+# scoping: `set -u` + reuse from another caller would unbound-variable).
 is_self_ancestor() {
-  local p=$1 a=$self
+  local p=$1 a=$2
   while [ "$a" != "0" ] && [ -n "$a" ]; do
     [ "$a" = "$p" ] && return 0
     a=$(ps -o ppid= -p "$a" 2>/dev/null | tr -d ' ')
@@ -35,14 +38,29 @@ is_self_ancestor() {
   return 1
 }
 full_cleanup() {
-  local self=$$ p
-  for p in $(ps -eo pid=,args= \
-              | grep -F -e "$CFG" -e "nav2_sandbox_robot.py" \
-              | awk '{print $1}' | sort -u); do
+  local self=$$ p ln snap
+  # Snapshot `ps` ONCE, then match with in-shell `case`.  The matcher
+  # pattern must NEVER appear in any process argv: a `ps | grep -F -e $CFG`
+  # pipeline puts CFG into grep's own argv, ps picks that transient PID back
+  # up, it is NOT on our ancestor chain so is_self_ancestor can't stop it,
+  # and the kill is a no-op ONLY because that grep already exited -- with
+  # PID reuse the same code kills an unrelated process.  (Same family as the
+  # documented full-commandline self-match trap; here the match string never
+  # lives in argv at all.)
+  snap=$(ps -eo pid=,args=)
+  while IFS= read -r ln; do
+    [ -z "$ln" ] && continue
+    p=${ln%% *}
     [ "$p" = "$self" ] && continue
-    is_self_ancestor "$p" && continue
+    case "$ln" in
+      *"$CFG"* | *"nav2_sandbox_robot.py"*) ;;
+      *) continue ;;
+    esac
+    is_self_ancestor "$p" "$self" && continue
     kill -9 "$p" 2>/dev/null || true
-  done
+  done <<EOF
+$snap
+EOF
   sleep 1
 }
 
