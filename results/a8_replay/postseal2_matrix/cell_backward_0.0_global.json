@@ -1,0 +1,20 @@
+{
+ "cell": "backward|v_min=0.0|global_legacy",
+ "geometry": "backward",
+ "v_min": 0.0,
+ "controller_projection_mode": "global_legacy",
+ "audit_mode": "accepted",
+ "done_reason": "COMPLETED",
+ "raw_arc_final": 32.209,
+ "accepted_arc_final": 32.209,
+ "progress_ratio": 0.9958,
+ "skipped_arc_ratio": 0.0,
+ "max_arc_jump": 0.033,
+ "projection_jump_count": 0,
+ "projection_reacquire_count": 0,
+ "e_y_rms": 0.0199,
+ "qp_failures": 0,
+ "v_end": 0.313,
+ "steps": 1440,
+ "path_length_m": 32.344
+}

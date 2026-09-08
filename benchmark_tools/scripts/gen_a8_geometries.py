@@ -7,10 +7,14 @@ lane width 0.30 m):
 
   a8_cap.json       row ends joined by half-circle caps (r = 0.15, u9 style)
   a8_nocap.json     row ends joined by straight 0.30 m jumps (pre-u9 style)
-  a8_backward.json  first connector = reverse link: the robot backs out of
-                    the row and reverses around a half circle into the next
-                    row (segment_gear = -1, reference v < 0) -- a backward
-                    A* connection per doc A9 semantics
+  a8_backward.json  the cell that used to carry the reverse_link connector
+                    (gear = -1 sustained reverse).  Post-seal2 ruling: the
+                    predecessor MPC has no reverse semantics and stalled on
+                    it (progress 0.14-0.15 on all four matrix cells), so the
+                    planner now emits the executable geometry instead -- the
+                    180-degree turn is driven FORWARD as a half-circle cap
+                    (same fold as a8_cap).  reverse_link is retired and
+                    rejected by trajectory_tools.reference_guard.
   a8_cap_real.json  the REAL u9 plan converted as-is; NOT a matrix cell --
                     the A8.0 stall-alignment case only (target: the B6
                     first-run stall at 7.3 m)
@@ -39,6 +43,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from mpc_core.types import Trajectory  # noqa: E402
 from trajectory_tools.curvature_estimator import omega_violations  # noqa: E402
+from trajectory_tools.reference_guard import reference_violations  # noqa: E402
 from trajectory_tools.resample import resample_uniform  # noqa: E402
 
 DS = 0.05
@@ -131,26 +136,19 @@ def _cap(x_edge, y0, y1, bulge):
 
 
 def serpentine(n_rows, x0, x1, y0, first_connector):
-    """Boustrophedon: row 0 runs x0->x1 (+x); every subsequent connector per
-    `first_connector` except the FIRST connector of the backward geometry,
-    which is the reverse link.  Rows alternate direction; connectors sit at
-    alternating row edges."""
+    """Boustrophedon: row 0 runs x0->x1 (+x); every connector per
+    'first_connector' (cap or straight).  Rows alternate direction;
+    connectors sit at alternating row edges.  The post-seal2 ruling removed
+    the reverse_link connector entirely: a sustained-reverse reference is
+    infeasible for the forward-only predecessor MPC, so what used to be the
+    backward A* link is now driven forward as a half-circle cap."""
     xs, ys, gs = [], [], []
     y = y0
     _push(xs, ys, gs, _row(x0, x1, y), +1.0)   # row 0: x0 -> x1
     edge = x1
     for k in range(1, n_rows):
         y_next = y0 + k * LANE_W
-        if k == 1 and first_connector == "reverse_link":
-            # -- backward A* link (doc A9): reverse out, reverse around the
-            # half circle, arrive on the next row heading-flipped.
-            x_back = edge - 4.0 * CAP_R
-            _push(xs, ys, gs, _row(edge, x_back, y), -1.0)          # back out
-            cap_pts = _cap(x_back, y, y_next, bulge=+1.0)
-            cap_pts = [(2 * x_back - px, py) for (px, py) in cap_pts]
-            _push(xs, ys, gs, cap_pts, -1.0)                        # reverse arc
-            _push(xs, ys, gs, _row(x_back, edge, y_next), -1.0)     # reverse in
-        elif first_connector == "cap":
+        if first_connector == "cap":
             _push(xs, ys, gs,
                   _cap(edge, y, y_next, bulge=+1.0 if edge == x1 else -1.0),
                   +1.0)
@@ -197,6 +195,14 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
 
     def emit(name, traj, meta):
+        # Post-seal2 guard: no reference leaves the planner without passing
+        # the feasibility gate (omega bound + no sustained reverse).
+        verdict = reference_violations(
+            traj.kappa, traj.v, OMEGA_MAX, s=traj.s)
+        if not verdict["feasible"]:
+            raise RuntimeError(
+                f"{name}: planner output failed the reference guard -- "
+                f"{'; '.join(verdict['reasons'])}")
         payload = {
             "frame_id": "map",
             "meta": meta,
@@ -220,13 +226,20 @@ def main():
     xr0, xr1 = x0 + 0.1, x0 + 0.1 + args.row_len
     yr0 = y0 + 0.1
     for kind in ("cap", "nocap", "backward"):
-        conn = {"cap": "cap", "nocap": "straight",
-                "backward": "reverse_link"}[kind]
+        # Post-seal2: the backward cell keeps its name for matrix
+        # traceability, but its connector is the forward half-circle cap --
+        # reverse_link is retired (guard-infeasible, tracker STALL).
+        conn = {"cap": "cap", "nocap": "straight", "backward": "cap"}[kind]
         xs_l, ys_l, gs_l = serpentine(args.rows, xr0, xr1, yr0, conn)
         t = _finish(xs_l, ys_l, gs_l)
-        emit(f"a8_{kind}.json", t,
-             {"kind": kind, "rows": args.rows, "row_len": args.row_len,
-              "lane_w": LANE_W, "connector": conn})
+        meta = {"kind": kind, "rows": args.rows, "row_len": args.row_len,
+                "lane_w": LANE_W, "connector": conn}
+        if kind == "backward":
+            meta["replaces"] = ("reverse_link retired: sustained reverse "
+                                "infeasible for the forward-only "
+                                "predecessor MPC; see "
+                                "trajectory_tools.reference_guard")
+        emit(f"a8_{kind}.json", t, meta)
 
 
 if __name__ == "__main__":
