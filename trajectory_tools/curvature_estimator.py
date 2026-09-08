@@ -35,6 +35,11 @@ def estimate_curvature(x: np.ndarray, y: np.ndarray) -> np.ndarray:
 
     ``kappa[i] = wrap(yaw[i+1] - yaw[i-1]) / (2*ds_i)`` where the arc step is
     the chord distance.  Endpoints copy their neighbour.
+
+    NOTE (Day 4-5): this is a finite difference and is only meaningful on
+    (near-)uniformly spaced input.  Resample by arc length first
+    (trajectory_tools.resample.resample_uniform) -- on the raw non-uniform
+    u9 plan it manufactures phantom corners (R~0.03 m at folds).
     """
     x = np.asarray(x, dtype=float)
     y = np.asarray(y, dtype=float)
@@ -55,24 +60,63 @@ def estimate_curvature(x: np.ndarray, y: np.ndarray) -> np.ndarray:
 
 
 def complete_speed_curvature(x: np.ndarray, y: np.ndarray, v_default: float,
-                             v_max: float) -> tuple:
+                             v_max: float, omega_max: float = 2.0,
+                             v_floor: float = 0.15) -> tuple:
     """Adapter completion rule: fill tangent/curvature/speed from poses only.
 
-    Deterministic rule (documented in docs/ros2_interface_contract.md):
-    default forward speed, capped so that ``|omega| = |kappa| * v <= omega_max``
-    when an angular-velocity bound is given via ``v_max`` semantics -- here the
-    cap keeps curvature * curvature * v within a mild bound.  Returns
-    ``(yaw, kappa, v)`` arrays.
+    Deterministic rule: default forward speed, capped so that the implied
+    angular rate stays inside the motion limit, ``|kappa| * v <= omega_max``:
+
+        v = min(v_default, omega_max / |kappa|)   (where |kappa| > 0)
+
+    The completion FLOOR (kept for its original purpose -- preventing the
+    tracker crawling at recorded sharp corners) is applied ONLY where it
+    cannot violate the omega bound, i.e. on points with
+    ``|kappa| <= omega_max / v_floor``.  On tighter points the pure
+    kinematic cap stands (no raise): this is the Day 4-5 fix -- the old
+    ``max(floor, cap)`` pushed an already-correct cap back ABOVE the motion
+    limit (v=0.15 at |kappa|=31.4 requires 4.7 rad/s > 2.0).
+
+    Returns ``(yaw, kappa, v)`` arrays.
     """
     yaw = estimate_heading(x, y)
     kappa = estimate_curvature(x, y)
-    # gentle speed shaping in curves (deterministic, monotone)
     k_abs = np.abs(kappa)
+    eps = 1e-6
     v = np.full(len(x), float(v_default))
-    cap = np.where(k_abs > 1e-6, min(v_max, 0.6) / np.maximum(k_abs, 1e-6), v_default)
-    v = np.minimum(v, np.maximum(cap, 0.1))
-    v = np.minimum(v, v_max)
+    # kinematic cap: |kappa| * v <= omega_max
+    with np.errstate(divide="ignore", invalid="ignore"):
+        cap = np.where(k_abs > eps, omega_max / np.maximum(k_abs, eps),
+                       float(v_default))
+    v = np.minimum(v, cap)
+    # floor only inside the legal band (|kappa| <= omega_max / v_floor)
+    legal = k_abs <= omega_max / max(float(v_floor), 1e-9)
+    v = np.where(legal, np.maximum(v, float(v_floor)), v)
+    v = np.minimum(v, float(v_max))
     return yaw, kappa, v
+
+
+def omega_violations(kappa: np.ndarray, v: np.ndarray,
+                     omega_max: float = 2.0) -> tuple:
+    """Guard (Day 4-5): reference feasibility ``max(|kappa| * |v|) <= omega_max``.
+
+    Returns ``(indices, max_ratio)`` where index i is violating when
+    ``|kappa[i]| * |v[i]| > omega_max * (1 + 1e-9)`` and ``max_ratio`` is the
+    largest ``|kappa|*|v|/omega_max`` over all points (0.0 when no data).
+    A reference trajectory entering a tracker MUST satisfy this; the old
+    floor-after-cap rule violated it on 16/250 points of the real u9 plan
+    (max 4.71 rad/s vs 2.0).
+    """
+    kappa = np.asarray(kappa, dtype=float)
+    v = np.asarray(v, dtype=float)
+    n = min(kappa.size, v.size)
+    if n == 0:
+        return (np.array([], dtype=int), 0.0)
+    omega = np.abs(kappa[:n]) * np.abs(v[:n])
+    bound = omega_max * (1.0 + 1e-9)
+    idx = np.nonzero(omega > bound)[0]
+    ratio = float(omega.max() / omega_max) if omega.size else 0.0
+    return (idx, ratio)
 
 
 def math_atan2(dy: float, dx: float) -> float:

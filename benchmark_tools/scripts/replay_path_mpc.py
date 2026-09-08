@@ -3,9 +3,13 @@
 reference core (offline, pure-python) and produce tracking metrics.
 
 Path completion (deterministic, mirrors ros2/trajectory_adapter.cpp):
+  * RESAMPLE uniformly by arc length first (ds=0.05) -- recorded plans are
+    non-uniform and finite-difference curvature on the raw polyline
+    manufactures phantom corners (Day 4-5);
   * yaw from neighbour chords, curvature from heading deltas over 2-chord
-    arc,
-  * speed: v_default capped by curve speed and v_max.
+    arc (on the resampled points);
+  * speed: v = min(v_default, omega_max/|kappa|); the 0.15 floor applies
+    only where |kappa| <= omega_max/0.15, never pushing above omega_max.
 
 Usage:
   python3 replay_path_mpc.py --recorded explorer_path.json \
@@ -28,10 +32,18 @@ from mpc_core.progress_gate import ProgressAllowanceGate
 from mpc_core.model import DifferentialDrivePlant
 from mpc_core.mpc import LinearMpcController
 from mpc_core.types import KinematicState, MpcParams, Trajectory, wrap_angle
+from trajectory_tools.curvature_estimator import (
+    estimate_curvature, estimate_heading, omega_violations,
+)
+from trajectory_tools.resample import resample_uniform
 
 
 def build_trajectory(poses) -> Trajectory:
-    """poses: [[x, y, ...], ...] (yaw/t ignored; recomputed deterministically)."""
+    """poses: [[x, y, ...], ...] (yaw/t ignored; recomputed deterministically).
+
+    Day 4-5: resample uniformly (ds=0.05) BEFORE deriving yaw/kappa/speed,
+    then complete speed kinematically (omega_max-bounded; floor only in the
+    legal band).  Guards that the finished reference obeys omega_max."""
     xy = [(float(p[0]), float(p[1])) for p in poses]
     if len(xy) < 2:
         raise ValueError("recorded path needs >= 2 poses")
@@ -40,30 +52,31 @@ def build_trajectory(poses) -> Trajectory:
     for p in xy[1:]:
         if math.hypot(p[0] - dedup[-1][0], p[1] - dedup[-1][1]) > 1e-6:
             dedup.append(p)
-    n = len(dedup)
-    xs = np.array([p[0] for p in dedup])
-    ys = np.array([p[1] for p in dedup])
+    xs, ys = resample_uniform(
+        [p[0] for p in dedup], [p[1] for p in dedup], ds=0.05)
+    n = xs.size
+    yaw = estimate_heading(xs, ys)
+    kappa = estimate_curvature(xs, ys)
     s = np.zeros(n)
     for i in range(1, n):
         s[i] = s[i - 1] + math.hypot(xs[i] - xs[i - 1], ys[i] - ys[i - 1])
-    yaw = np.zeros(n)
-    for i in range(n):
-        j0 = max(0, i - 1)
-        j1 = min(n - 1, i + 1)
-        yaw[i] = math.atan2(ys[j1] - ys[j0], xs[j1] - xs[j0])
-    kappa = np.zeros(n)
-    for i in range(1, n - 1):
-        arc = 0.5 * ((s[i] - s[i - 1]) + (s[i + 1] - s[i]))
-        if arc > 1e-9:
-            kappa[i] = wrap_angle(yaw[i + 1] - yaw[i - 1]) / (2.0 * arc)
-    # speed completion with a floor: sharp recorded corners give huge local
-    # kappa -> v_ref ~ 0 -> the tracker stalls forever at the corner
+    # kinematic completion: v = min(v_default, omega_max/|kappa|); floor only
+    # where |kappa| <= omega_max/v_floor (never pushes above omega_max).
+    omega_max = 2.0
     v_floor = 0.15
+    k_abs = np.abs(kappa)
+    eps = 1e-6
     v = np.full(n, 0.5)
-    for i in range(n):
-        k = abs(kappa[i])
-        if k > 1e-6:
-            v[i] = max(v_floor, min(0.5, 0.3 / max(k, 1e-6)))
+    with np.errstate(divide="ignore", invalid="ignore"):
+        cap = np.where(k_abs > eps, omega_max / np.maximum(k_abs, eps), 0.5)
+    v = np.minimum(v, cap)
+    legal = k_abs <= omega_max / max(v_floor, 1e-9)
+    v = np.where(legal, np.maximum(v, v_floor), v)
+    viol, ratio = omega_violations(kappa, v, omega_max)
+    if viol.size:
+        raise RuntimeError(
+            f"completed reference violates omega bound: {viol.size} pts, "
+            f"max ratio {ratio:.3f} (guard)")
     return Trajectory(s=s, x=xs, y=ys, yaw=yaw, kappa=kappa, v=v)
 
 

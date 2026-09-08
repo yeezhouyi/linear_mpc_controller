@@ -18,34 +18,51 @@ lane width 0.30 m):
 Files carry the full Trajectory field set (x/y/yaw/kappa/s/v +
 segment_gear) so the runner loads them WITHOUT re-deriving yaw.
 
-Speed profile: repo-default complete_speed_curvature -- v = max(0.15,
-min(0.5, 0.3/|kappa|)); reverse segments carry negative v (doc A9).
+Speed profile: kinematic completion -- v = min(0.5, 2.0/|kappa|), with the
+0.15 floor applied only where |kappa| <= 2.0/0.15 (it can never push the
+reference above omega_max); reverse segments carry negative v (doc A9).
+The REAL plan (a8_cap_real) is first resampled to uniform ds=0.05 by arc
+length -- the raw u9 output (0.05 ~ 4.55 m spacing) makes finite-difference
+curvature manufacture phantom corners (Day 4-5 fix order 1 -> 2 -> 3).
 """
 from __future__ import annotations
 
 import argparse
 import json
 import math
+import sys
 from pathlib import Path
 
 import numpy as np
 
-import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from mpc_core.types import Trajectory
+from mpc_core.types import Trajectory  # noqa: E402
+from trajectory_tools.curvature_estimator import omega_violations  # noqa: E402
+from trajectory_tools.resample import resample_uniform  # noqa: E402
 
 DS = 0.05
 LANE_W = 0.30
 CAP_R = 0.15
 V_FLOOR = 0.15
 V_CAP = 0.5
+OMEGA_MAX = 2.0
 
 
 def _speed_profile(kappa: np.ndarray, gear_seg: np.ndarray) -> np.ndarray:
-    """Per-point speed; sign follows the point's outgoing segment gear."""
-    v = np.array([max(V_FLOOR, min(V_CAP, 0.3 / max(abs(k), 1e-6)))
-                  for k in kappa])
+    """Per-point speed; sign follows the point's outgoing segment gear.
+
+    Day 4-5 rule: v = min(V_CAP, omega_max/|kappa|) and the V_FLOOR is only
+    applied where it cannot violate the omega bound (|kappa| <=
+    omega_max/V_FLOOR).  The old ``max(V_FLOOR, min(V_CAP, 0.3/|k|))`` pushed
+    the cap back above omega_max on sharp points (v=0.15 at |k|=31.4 needs
+    4.7 rad/s > 2.0) -- the root cause of the real-path STALL at 0.988 m.
+    """
+    k_abs = np.abs(kappa)
+    eps = 1e-6
+    v = np.array([min(V_CAP, OMEGA_MAX / max(abs(k), eps)) for k in kappa])
+    legal = k_abs <= OMEGA_MAX / max(V_FLOOR, 1e-9)
+    v = np.where(legal, np.maximum(v, V_FLOOR), v)
     sign = np.array([1.0 if (i < gear_seg.size and gear_seg[i] >= 0)
                      else -1.0 for i in range(kappa.size)])
     return v * sign
@@ -148,9 +165,19 @@ def serpentine(n_rows, x0, x1, y0, first_connector):
 
 
 def real_plan_traj(poses):
+    """Real u9 plan -> trajectory.  Day 4-5: resample uniformly FIRST (the
+    raw plan has 0.05~4.55 m spacing, which would manufacture phantom
+    corners in the finite-difference curvature), then finish."""
     x = [float(p[0]) for p in poses]
     y = [float(p[1]) for p in poses]
-    return _finish(x, y, [+1.0] * len(x))
+    xr, yr = resample_uniform(x, y, ds=DS)
+    traj = _finish(xr, yr, [+1.0] * xr.size)
+    viol, ratio = omega_violations(traj.kappa, traj.v, OMEGA_MAX)
+    if viol.size:
+        raise RuntimeError(
+            f"real plan still violates omega bound: {viol.size} pts, "
+            f"max ratio {ratio:.3f} (guard) -- resample/kappa/speed broken")
+    return traj
 
 
 def main():
@@ -176,10 +203,10 @@ def main():
             "traj": {
                 "x": [round(float(v), 6) for v in traj.x],
                 "y": [round(float(v), 6) for v in traj.y],
-                "yaw": [round(float(v), 6) for v in traj.yaw],
-                "kappa": [round(float(v), 6) for v in traj.kappa],
-                "s": [round(float(v), 6) for v in traj.s],
-                "v": [round(float(v), 6) for v in traj.v],
+                "yaw": [round(float(v), 10) for v in traj.yaw],
+                "kappa": [round(float(v), 10) for v in traj.kappa],
+                "s": [round(float(v), 10) for v in traj.s],
+                "v": [round(float(v), 10) for v in traj.v],
                 "segment_gear": [float(v) for v in traj.segment_gear],
             },
         }

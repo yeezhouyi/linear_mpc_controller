@@ -12,9 +12,9 @@
  "max_arc_jump": 0.025,
  "projection_jump_count": 0,
  "projection_reacquire_count": 0,
- "e_y_rms": 0.0256,
- "qp_failures": 164,
- "v_end": 0.0,
+ "e_y_rms": 0.0752,
+ "qp_failures": 26,
+ "v_end": -0.05,
  "steps": 401,
  "path_length_m": 32.869
 }
