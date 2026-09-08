@@ -9,12 +9,26 @@
 #   POS : genuine target whose argv CONTAINS our CFG and sits off the
 #         runner's ancestor chain -> MUST be killed (cleanup actually fires)
 #
-# Usage: check_cleanup_precision.sh [runner]   (default = repo runner)
-# Exit 0 = both assertions hold.  Run once against a no-op/buggy runner to
-# see POS go red, once against the fixed runner to see it go green.
+# Usage: check_cleanup_precision.sh [runner]
+#   Default runner = run_b6b_sandbox.sh NEXT TO THIS SCRIPT (derived from
+#   $0, never a hardcoded absolute path -- a no-arg invocation must test
+#   the runner this file ships with, not some other checkout).
+# CFG is parsed from THE RUNNER UNDER TEST (its own WS/REPO/CFG lines),
+# never a hardcoded copy: if the runner's config path moves and this file
+# still carried the old string, the POS target would never match -> false
+# red -> and the natural "fix" (loosen the match) dismantles the exact
+# precision this test protects.
+# Exit 0 = both assertions hold AND the gate itself passed.
 set -u
-RUNNER=${1:-/home/zhouyi/ros2_ws/src/linear_mpc_controller/scripts/run_b6b_sandbox.sh}
-CFG=/home/zhouyi/lmpc_ws/src/linear_mpc_controller/config/controller_server.yaml
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
+RUNNER=${1:-"$SCRIPT_DIR/run_b6b_sandbox.sh"}
+
+[ -f "$RUNNER" ] || { echo "FAIL: runner not found: $RUNNER"; exit 1; }
+eval "$(grep -E '^(WS|REPO|CFG)=' "$RUNNER" | head -3)"
+CFG_ACTUAL=${CFG:-}
+[ -n "$CFG_ACTUAL" ] || { echo "FAIL: cannot derive CFG from runner $RUNNER"; exit 1; }
+echo "runner under test: $RUNNER"
+echo "cfg derived from runner: $CFG_ACTUAL"
 
 # NEG: argv[0] renamed, args carry no CFG path
 exec -a controller_server_dummy sleep 90 &
@@ -26,14 +40,16 @@ NEG=$!
 # within ~0.25 s, wiping CFG from argv (the fixed cleanup then correctly
 # spares it, giving a FALSE red on the POS side).  python3 keeps its argv
 # (the CFG path lands in sys.argv) for the whole lifetime.
-python3 -c 'import time; time.sleep(90)' "$CFG" &
+python3 -c 'import time; time.sleep(90)' "$CFG_ACTUAL" &
 POS=$!
 echo "neg pid=$NEG  argv contains 'controller_server', NOT our CFG"
 echo "pos pid=$POS  argv: $(tr '\0' ' ' < /proc/$POS/cmdline 2>/dev/null | head -c 100)"
 sleep 1
 
 bash "$RUNNER" 1 > /tmp/cleanup_check_gate.log 2>&1
-echo "gate: $(grep -E 'stage1 lifecycle' /tmp/cleanup_check_gate.log || echo 'NO GATE LINE')"
+GATE_RC=$?
+echo "gate rc=$GATE_RC"
+grep -E '\[B6B stage1 lifecycle\]' /tmp/cleanup_check_gate.log | tail -1 || echo "(no smoke stage1 line)"
 sleep 2
 
 neg_alive=no; pos_alive=no
@@ -43,12 +59,13 @@ echo "NEG alive=$neg_alive (want yes: unrelated spared)"
 echo "POS alive=$pos_alive (want no: genuine CFG target killed)"
 
 ok=1
+[ "$GATE_RC" = 0 ] || { echo "FAIL: gate runner exited $GATE_RC"; ok=0; }
 [ "$neg_alive" = yes ] || { echo "FAIL: unrelated proc was killed (over-broad match)"; ok=0; }
 [ "$pos_alive" = no ]  || { echo "FAIL: genuine CFG target survived (cleanup no-op / pid-extraction broken)"; ok=0; }
 kill -9 "$NEG" "$POS" 2>/dev/null || true
 
 if [ "$ok" = 1 ]; then
-  echo "CLEANUP CHECK: PASS (spares unrelated, kills genuine)"
+  echo "CLEANUP CHECK: PASS (gate ok, spares unrelated, kills genuine)"
   exit 0
 fi
 echo "CLEANUP CHECK: FAIL"
