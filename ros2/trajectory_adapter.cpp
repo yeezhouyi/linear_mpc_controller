@@ -51,15 +51,36 @@ std::vector<TrackPoint> adaptPath(const nav_msgs::msg::Path & path, const Adapte
   pts[0].kappa = n > 1 ? pts[1].kappa : 0.0;
   pts[n - 1].kappa = n > 1 ? pts[n - 2].kappa : 0.0;
   // 4) positions + speed completion (deterministic)
+  // Kinematic bound (Day 4-5, mirrored from the python completion rule in
+  // trajectory_tools/curvature_estimator.py): |kappa| * v <= omega_max, so
+  // v <= omega_max / |kappa|.  No floor is applied after the cap -- a floor
+  // is exactly what lifted |kappa| * v back over the bound on the real plan
+  // (16/250 points) and produced QP infeasibility.
   for (size_t i = 0; i < n; ++i) {
     pts[i].x = path.poses[i].pose.position.x;
     pts[i].y = path.poses[i].pose.position.y;
     const double k = std::fabs(pts[i].kappa);
     double v = p.v_default;
-    if (k > 1e-6) v = std::min(v, p.curve_speed / std::max(k, 1e-6));
+    if (k > 1e-6) {
+      v = std::min(v, p.curve_speed / std::max(k, 1e-6));
+      v = std::min(v, p.omega_max / std::max(k, 1e-6));
+    }
     pts[i].v = std::min(v, p.v_max);
   }
   return pts;
+}
+
+double maxOmegaRatio(const std::vector<TrackPoint> & pts, double omega_max)
+{
+  double worst = 0.0;
+  for (const auto & q : pts) {
+    const double ratio = std::fabs(q.kappa) * std::fabs(q.v) /
+      std::max(std::fabs(omega_max), 1e-9);
+    if (ratio > worst) {
+      worst = ratio;
+    }
+  }
+  return worst;
 }
 
 }  // namespace linear_mpc_controller

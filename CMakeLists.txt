@@ -97,6 +97,17 @@ if(ament_cmake_FOUND)
   target_link_libraries(linear_mpc_node linear_mpc_core)
   install(TARGETS linear_mpc_node DESTINATION lib/${PROJECT_NAME})
 
+  # Day 4-5 cross-language parity: C++ completion vs python reference guard.
+  add_executable(adapter_speed_dump tools/adapter_speed_dump.cpp ros2/trajectory_adapter.cpp)
+  target_include_directories(adapter_speed_dump PRIVATE include ros2)
+  ament_target_dependencies(adapter_speed_dump rclcpp nav_msgs geometry_msgs)
+  target_link_libraries(adapter_speed_dump linear_mpc_core)
+  if(BUILD_TESTING)
+    add_test(NAME adapter_speed_parity
+      COMMAND ${Python3_EXECUTABLE}
+        ${CMAKE_CURRENT_SOURCE_DIR}/tools/check_adapter_parity.py)
+  endif()
+
   add_executable(velocity_arbiter_node ros2/velocity_arbiter.cpp)
   target_include_directories(velocity_arbiter_node PRIVATE include ros2)
   ament_target_dependencies(velocity_arbiter_node rclcpp geometry_msgs)
