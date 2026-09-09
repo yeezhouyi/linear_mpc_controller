@@ -2,16 +2,20 @@
 
 **A linear time-varying MPC trajectory-tracking controller for differential-drive
 robots, with the safety filter, projection gate, and Nav2 plugin glue needed to
-run it on real ROS 2 hardware.** The package provides the same controller as a
-ROS-free Python reference core (for offline analysis and tests) and as a
-C++/Eigen/OSQP production node (for the real-time path on `/cmd_vel`).
+run it under ROS 2 (research / engineering prototype, validated in Gazebo
+simulation -- no physical-robot deployment yet).** The package provides the
+same controller as a ROS-free Python reference core (for offline analysis and
+tests) and as a C++/Eigen/OSQP real-time node (for the `/cmd_vel` path).
 
 In the broader two-repo stack (`linear_mpc_controller` + `ros2_tunnel_explorer`),
-this package owns the *low-level tracking* layer: any planner that emits a
-Frenet-friendly path (our tunnel explorer, or external) feeds through
+this package owns the *low-level tracking* layer as an INDEPENDENTLY validated
+controller: any planner that emits a Frenet-friendly path can feed through
 `Trajectory Adapter → Linear MPC (+ safety projection) → Velocity Arbiter →
-/cmd_vel`. Planning, frontier selection, coverage chains, and sealed result
-tables live in the sister repo `ros2_tunnel_explorer`.
+/cmd_vel`. The sealed coverage chain in the sister repo does NOT use this
+controller -- its chain controller is Nav2 RotationShim + DWB, and this plugin
+is only exercised against it in interface-level integration notes. Planning,
+frontier selection, coverage chains, and sealed result tables live in the
+sister repo `ros2_tunnel_explorer`.
 
 ---
 
@@ -26,10 +30,15 @@ flowchart LR
     Gate["Safety Gate<br/>(reacquire, projection, odom-staleness)"]
     VA["Velocity Arbiter<br/>(safety / nav2 arbitration)"]
     Cmd["/cmd_vel"]
-    Robot["Differential-drive chassis<br/>(Gazebo / real)"]
+    Robot["Differential-drive chassis<br/>(Gazebo sim; not yet on hardware)"]
 
     Plan --> TS --> TA --> MPC --> Gate --> VA --> Cmd --> Robot
 ```
+
+The dataflow above is this package's OWN controller path and is validated
+standalone. The sealed coverage chain in the sister repo
+(`ros2_tunnel_explorer`) runs Nav2 RotationShim + DWB and does NOT call this
+controller (see Known limits).
 
 The same algorithm exists twice on purpose: the Python reference core
 (`mpc_core/`, numpy dense ADMM) is the audited source of truth used by tests,
@@ -44,7 +53,7 @@ Python one every `ctest` run.
 The clip below is the deterministic reference-core (Python / numpy ADMM, no
 plant noise, perfect velocity tracking) running the formal `circle R=2`
 benchmark and replaying the executed path against the reference. The
-production numbers (Gazebo / TurtleBot3) and the raw replay live next to it
+Gazebo / TurtleBot3 simulation numbers and the raw replay live next to it
 under `results/mpc_smoke_20260909/circle/` (`tb3_smoke.json`,
 `REPRODUCE.md`, `SHA256SUMS`).
 
@@ -140,7 +149,7 @@ bash src/linear_mpc_controller/scripts/tb3_smoke.sh   # Gazebo circle smoke
   ref_start` (circle / u-turn) makes `reference_complete` fire on cycle 0 and
   the controller never starts moving. `tb3_smoke.sh` already accounts for this.
 - **No hard-realtime claim**: all results are WSL2 / Gazebo Harmonic sim.
-- **No full raw-record pass on the production acceptance set**: the
+- **No full raw-record pass on the formal acceptance set**: the
   pre-guard raw reference fails (250-waypoint plan, 16 over `ω_max`); any
   reference must first pass `certify_reference` + `speed_profile`.
 - **Residual RL branch is frozen** and not part of the public claim
