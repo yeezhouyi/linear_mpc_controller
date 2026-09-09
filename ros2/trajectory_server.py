@@ -107,7 +107,17 @@ class TrajectoryServer(Node):
     def _to_path(self):
         path = Path()
         path.header.frame_id = "odom"
-        for i in range(self._traj.n):
+        # Closed-loop tracks (circle) return to the start point: the
+        # nearest-point projection then ties between s=0 and s=L and the
+        # controller reports REFERENCE_COMPLETE at t=0 (TB3 smoke,
+        # 2026-09-09) -- the robot never moves.  OPEN the loop: trim
+        # trailing poses until the served endpoint is >= 0.5 m from the
+        # start, so start and end are geometrically distinct.
+        n = self._traj.n
+        while n > 2 and math.hypot(self._traj.x[n - 1] - self._traj.x[0],
+                                   self._traj.y[n - 1] - self._traj.y[0]) < 0.5:
+            n -= 1
+        for i in range(n):
             p = PoseStamped()
             p.header.frame_id = "odom"
             p.pose.position.x = float(self._traj.x[i])
