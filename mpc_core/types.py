@@ -234,6 +234,35 @@ class MpcParams:
     # "global" = pre-A5 raw-arc controller (every projection accepted) --
     # instrumentation for the 12-grid matrix; production stays windowed.
     controller_projection_mode: str = "windowed"
+
+    def __post_init__(self) -> None:
+        """Reject invalid configurations at construction (engineering
+        checklist item 3: wrong params must be refused, not silently
+        accepted)."""
+        if self.Ts <= 0:
+            raise ValueError("Ts must be > 0, got %s" % self.Ts)
+        if int(self.N) < 1:
+            raise ValueError("N must be >= 1, got %s" % self.N)
+        if self.v_min > self.v_max:
+            raise ValueError("v_min (%s) must be <= v_max (%s)"
+                             % (self.v_min, self.v_max))
+        if self.omega_max <= 0:
+            raise ValueError("omega_max must be > 0, got %s" % self.omega_max)
+        if self.a_max <= 0 or self.alpha_max <= 0:
+            raise ValueError("a_max and alpha_max must be > 0, got %s / %s"
+                             % (self.a_max, self.alpha_max))
+        if getattr(self, "qp_max_iter", 1) < 1:
+            raise ValueError("qp_max_iter must be >= 1, got %s"
+                             % getattr(self, "qp_max_iter", None))
+        for name, w in (("Q_diag", self.Q_diag),
+                        ("Q_F_diag", self.Q_F_diag),
+                        ("S_diag", self.S_diag)):
+            if any(wi < 0 for wi in w):
+                raise ValueError("%s weights must be >= 0, got %s" % (name, w))
+        if self.controller_projection_mode not in ("windowed", "global"):
+            raise ValueError("controller_projection_mode must be 'windowed'"
+                             " or 'global', got %r"
+                             % self.controller_projection_mode)
     # ---- A5.1 acceptance gate (declared parameters; Python copies
     # kept numerically identical to mpc_core/progress_gate constants
     # and to the C++ controller, see A7.3/test gate guards) ---------
