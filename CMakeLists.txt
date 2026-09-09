@@ -17,7 +17,12 @@ find_package(Eigen3 3.4 REQUIRED NO_MODULE)
 # info->status_val).  Validated against ros-jazzy-osqp-vendor 0.2.0
 # (OSQP 0.6.2); newer 1.x has an incompatible API.  Golden cross-check
 # against the Python AdmmQp reference: test/test_qp_golden.cpp.
-option(LINEAR_MPC_WITH_OSQP "Enable OSQP-backed QP solver" OFF)
+# The controller node and the realtime solver gate REQUIRE the OSQP
+# backend: with it OFF the core links the stub QpSolver, whose solve()
+# returns kFailed at 0 iterations on every cycle -- the controller then
+# sits in FALLBACK_ACTIVE forever (TB3 smoke, 2026-09-09).  Default ON;
+# set OFF only for OSQP-free python-core builds.
+option(LINEAR_MPC_WITH_OSQP "Enable OSQP-backed QP solver" ON)
 if(LINEAR_MPC_WITH_OSQP)
   find_package(osqp REQUIRED)
   add_definitions(-DLINEAR_MPC_HAVE_OSQP=1)

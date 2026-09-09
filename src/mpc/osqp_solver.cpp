@@ -101,6 +101,24 @@ public:
         const c_int ret = osqp_setup(&work, &data, &settings);
     if (ret != 0 || work == nullptr) {
       sol.status = QpSolution::Status::kFailed;
+      // one-time on-process diagnostic for the TB3 smoke (2026-09-09): the
+      // node QP failed setup on every cycle with clean errors; print what
+      // osqp actually rejected so the root cause is not guessed again.
+      static bool diag_printed = false;
+      if (!diag_printed) {
+        diag_printed = true;
+        bool h_finite = H.allFinite(), c_finite = C.allFinite();
+        bool q_finite = q.allFinite(), l_finite = l.allFinite(),
+             u_finite = u.allFinite();
+        std::cerr << "[osqp_solver] setup failed ret=" << ret
+                  << " n=" << H.cols() << " m=" << C.rows()
+                  << " finite(H,C,q,l,u)=" << h_finite << c_finite
+                  << q_finite << l_finite << u_finite
+                  << " nnzP=" << px.size() << " nnzA=" << ax.size()
+                  << " q[0]=" << (q.size() ? q(0) : 0.0)
+                  << " l[0]=" << (l.size() ? l(0) : 0.0)
+                  << " u[0]=" << (u.size() ? u(0) : 0.0) << std::endl;
+      }
       return sol;
     }
 

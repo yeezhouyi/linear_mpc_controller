@@ -73,12 +73,18 @@ tracks (terminal poses trimmed until the endpoint is >= 0.5 m from the
 start).  Before the fix the circle's endpoint==start made the projection
 tie s=0/s=L and the controller reported REFERENCE_COMPLETE at t=0.
 
-Open integration bug (needs a dedicated controller session): even with
-an open reference the C++ node's QP returns kFailed at 0 iterations /
-0 us on EVERY cycle from the first (errors all ~0), health stays
-FALLBACK_ACTIVE, and the robot never moves -- on circle AND u_turn
-tracks.  Unit `test_qp_cycle` (same solver, 425 us) and the python
-controller pass, so the defect is specific to the node instantiation /
-OSQP workspace path.  Smoke result: FAIL, evidence in the run logs
-(`/tmp/tb3_smoke.json`, diagnostics: health 9 / qp_status 2 / iters 0).
-External claim: TB3 closed-loop smoke NOT passed as of 2026-09-09.
+RESOLVED root cause (2026-09-09): the QP failure was NOT a node bug --
+it was a build option.  `CMakeLists.txt` declared
+`option(LINEAR_MPC_WITH_OSQP ... OFF)`, so plain `colcon build` (and my
+earlier incremental builds) compiled the core WITHOUT osqp_solver.cpp
+and the node linked the stub QpSolver, whose solve() returns kFailed at
+0 iterations / 0 us on every cycle -- health FALLBACK_ACTIVE forever,
+robot never moves.  Fix: the option now defaults ON (stub only for
+explicit OSQP-free python-core builds).  The osqp_solver.cpp failure
+path also gained a one-time diagnostic print.
+
+Verification after the fix (headless Gazebo + TurtleBot3 + circle):
+diagnostics health=OK, qp_status=SOLVED (150 iter, ~1.5 ms), fallback
+0; `scripts/tb3_smoke.sh` -> **PASS**: driven 20.7 m (~1.6 laps) over
+90 s at mean 0.23 m/s, distance-to-reference median 8.6 mm / p95
+34 mm / in-band 1.0.  External claim: TB3 closed-loop smoke PASSED.
