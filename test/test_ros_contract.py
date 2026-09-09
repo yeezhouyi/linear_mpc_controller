@@ -68,9 +68,14 @@ def test_node_uses_odom_freshness_gate():
 def test_seeking_guard_comes_before_qp_fail_count():
     # SEEKING/probation handled before QP-failure counting so a no-QP
     # seeking cycle (default kFailed) cannot trip qp_fail_max (fix 3).
+    # The abort policy itself is behaviour-tested in C++
+    # (test_qp_fail_monitor / test_reacquire_behavior); this test keeps the
+    # node-level ORDER contract: the early-return guard for SEEKING /
+    # PROBATION must appear BEFORE the QpFailMonitor is fed, so a seeking
+    # cycle never reaches the counter.
     text = (ROS2 / "nav2_mpc_controller.cpp").read_text(encoding="utf-8")
     i_seek = text.find("if (res.reacquire_seeking || res.in_probation)")
-    i_fail = text.find("res.qp_status == QpSolution::Status::kFailed")
+    i_fail = text.find("qp_fail_monitor_.record(res)")
     assert -1 not in (i_seek, i_fail)
     assert i_seek < i_fail, (
         "SEEKING/probation must be handled BEFORE the QP-failure counter"
