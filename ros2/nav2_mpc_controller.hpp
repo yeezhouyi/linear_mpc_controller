@@ -42,6 +42,8 @@
 #include "tf2_ros/buffer.h"
 
 #include "linear_mpc_controller/mpc/linear_mpc.hpp"
+#include "linear_mpc_controller/safety/qp_fail_monitor.hpp"
+#include "linear_mpc_controller/safety/reacquire_command.hpp"
 
 namespace linear_mpc_controller
 {
@@ -99,7 +101,9 @@ protected:
   double terminal_stop_margin_ = 0.20;
 
   // B6B.2 counters
-  int qp_fail_run_ = 0;
+  // QP-failure accounting lives in safety/qp_fail_monitor.hpp so the abort
+  // policy is unit-testable; max is synced from qp_fail_max_ at configure.
+  QpFailMonitor qp_fail_monitor_;
   int qp_fail_max_ = 3;
   int ambiguous_run_ = 0;
   int ambiguous_max_ = 5;

@@ -72,6 +72,13 @@ if(BUILD_TESTING)
   add_executable(test_window_end test/test_window_end.cpp)
   target_link_libraries(test_window_end PRIVATE linear_mpc_core)
   add_test(NAME window_end COMMAND test_window_end)
+  # ---- P1 review gates (2026-09-09): ROS-free safety seams -------------
+  add_executable(test_qp_fail_monitor test/test_qp_fail_monitor.cpp)
+  target_link_libraries(test_qp_fail_monitor PRIVATE linear_mpc_core)
+  add_test(NAME qp_fail_monitor COMMAND test_qp_fail_monitor)
+  add_executable(test_reacquire_command test/test_reacquire_command.cpp)
+  target_link_libraries(test_reacquire_command PRIVATE linear_mpc_core)
+  add_test(NAME reacquire_command COMMAND test_reacquire_command)
   # Cross-language LTV-window-tail parity (python reference).
   add_executable(window_tail_dump tools/window_tail_dump.cpp)
   target_link_libraries(window_tail_dump PRIVATE linear_mpc_core)
@@ -100,6 +107,11 @@ if(BUILD_TESTING)
       GOLDEN_FILE="${CMAKE_CURRENT_SOURCE_DIR}/test/golden_qp_vectors.txt")
     target_link_libraries(test_qp_golden PRIVATE linear_mpc_core)
     add_test(NAME qp_golden COMMAND test_qp_golden)
+    # P1-1: A4.2 reacquire behavior through REAL OSQP solves (the probation
+    # assertions need a solver that actually returns kSolved).
+    add_executable(test_reacquire_behavior test/test_reacquire_behavior.cpp)
+    target_link_libraries(test_reacquire_behavior PRIVATE linear_mpc_core)
+    add_test(NAME reacquire_behavior COMMAND test_reacquire_behavior)
   endif()
 endif()
 

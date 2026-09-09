@@ -78,6 +78,7 @@ void LinearMpcNav2Controller::configure(
   terminal_stop_margin_ =
     node->get_parameter(plugin_name_ + ".terminal_stop_margin").as_double();
   qp_fail_max_ = node->get_parameter(plugin_name_ + ".qp_fail_max").as_int();
+  qp_fail_monitor_.setMaxFails(qp_fail_max_);
   ambiguous_max_ = node->get_parameter(plugin_name_ + ".ambiguous_max").as_int();
   tf_tolerance_ = node->get_parameter(plugin_name_ + ".tf_tolerance").as_double();
 
@@ -120,7 +121,7 @@ void LinearMpcNav2Controller::setPlan(const nav_msgs::msg::Path & plan)
   controller_->setReference(traj);   // resets gate + reacquire (A5.1/A4.2)
   path_len_ = traj.back().s;
   has_plan_ = true;
-  qp_fail_run_ = 0;
+  qp_fail_monitor_.reset();
   ambiguous_run_ = 0;
   last_cmd_v_ = last_cmd_w_ = 0.0;
   RCLCPP_INFO(logger_, "setPlan: %zu points, L=%.3f m in frame %s",
@@ -191,47 +192,43 @@ geometry_msgs::msg::TwistStamped LinearMpcNav2Controller::computeVelocityCommand
   // controller after a few seeking cycles instead of letting the reacquire
   // protocol time out on its own (reacquire_timeout_steps).  Probation DOES
   // run the QP but is also self-bounded -- inside it we NEVER throw.
+  // Output shaping lives in safety/reacquire_command.hpp; the QP-failure
+  // accounting in safety/qp_fail_monitor.hpp skips these cycles, mirroring
+  // the early return below (both are unit-tested ROS-free).
   if (res.reacquire_seeking || res.in_probation) {
     geometry_msgs::msg::TwistStamped cmd;
     cmd.header.stamp = pose.header.stamp;
     cmd.header.frame_id = base_frame_id_;
     // A4.2: bounded decel-to-zero / probation -- return zero-or-capped,
     // NEVER throw (bounded by reacquire_timeout_steps / probation_steps).
-    double v_allow = params_.v_max;
-    if (speed_limit_active_) {
-      const double lim = speed_limit_percentage_
-                           ? params_.v_max * std::abs(speed_limit_) / 100.0
-                           : std::abs(speed_limit_);
-      v_allow = std::min(v_allow, lim);
-    }
-    if (res.in_probation) {
-      v_allow = std::min(v_allow, params_.v_probation);
-    }
-    const double v = std::clamp(res.v_cmd, -v_allow, v_allow);
-    const double w = std::clamp(
-      res.omega_cmd, -params_.omega_max, params_.omega_max);
-    // terminal stop must still apply on the accepted arc
-    const double remaining =
-      std::max(0.0, path_len_ - res.accepted_arc - terminal_stop_margin_);
-    const double v_term =
-      std::sqrt(2.0 * std::max(params_.a_max, 1e-6) * remaining);
-    cmd.twist.linear.x = std::clamp(v, -v_term, v_term);
-    cmd.twist.angular.z = w;
-    last_cmd_v_ = cmd.twist.linear.x;
-    last_cmd_w_ = cmd.twist.angular.z;
+    ReacquireCommandParams rp;
+    rp.v_max = params_.v_max;
+    rp.omega_max = params_.omega_max;
+    rp.a_max = params_.a_max;
+    rp.v_probation = params_.v_probation;
+    rp.terminal_stop_margin = terminal_stop_margin_;
+    rp.speed_limit_active = speed_limit_active_;
+    rp.speed_limit = speed_limit_;
+    rp.speed_limit_percentage = speed_limit_percentage_;
+    double v_out = 0.0;
+    double w_out = 0.0;
+    shapeReacquireCommand(res, rp, path_len_, v_out, w_out);
+    cmd.twist.linear.x = v_out;
+    cmd.twist.angular.z = w_out;
+    last_cmd_v_ = v_out;
+    last_cmd_w_ = w_out;
     return cmd;
   }
 
   // ---- B6B.2 QP-failure contract (normal tracking only) --------------
-  if (res.qp_status == QpSolution::Status::kFailed) {
-    ++qp_fail_run_;
-    if (qp_fail_run_ > qp_fail_max_) {
-      has_plan_ = false;
-      controller_.reset();
-      throw nav2_core::NoValidControl("B6B: QP failed beyond qp_fail_max");
-    }
-  } else if (qp_fail_run_ > 0 && res.qp_status == QpSolution::Status::kSolved) {
-    --qp_fail_run_;   // recovery credit
+  // QpFailMonitor re-implements the exact policy that used to live here:
+  // ++ on kFailed, one-step recovery credit on a later kSolved, abort when
+  // the run exceeds qp_fail_max.  record() also ignores SEEKING / PROBATION
+  // cycles outright, so the exclusion survives any future call-order change.
+  if (qp_fail_monitor_.record(res)) {
+    has_plan_ = false;
+    controller_.reset();
+    throw nav2_core::NoValidControl("B6B: QP failed beyond qp_fail_max");
   }
 
   // ---- B6B.1: two independent speed limits, take the min -------------
