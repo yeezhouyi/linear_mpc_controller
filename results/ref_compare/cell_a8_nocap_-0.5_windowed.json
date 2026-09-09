@@ -1,0 +1,28 @@
+{
+ "cell": "a8_nocap|v_min=-0.5|stateful_windowed",
+ "geometry": "a8_nocap",
+ "v_min": -0.5,
+ "controller_projection_mode": "stateful_windowed",
+ "audit_mode": "accepted",
+ "done_reason": "COMPLETED",
+ "raw_arc_final": 31.359,
+ "accepted_arc_final": 31.359,
+ "progress_ratio": 0.961,
+ "skipped_arc_ratio": 0.0345,
+ "max_arc_jump": 0.118,
+ "projection_jump_count": 10,
+ "projection_reacquire_count": 10,
+ "e_y_rms": 0.0128,
+ "qp_failures": 0,
+ "v_end": 0.319,
+ "steps": 1582,
+ "path_length_m": 31.5,
+ "reference": "a8_nocap",
+ "gen_time_ms": null,
+ "comfort": {
+  "kappa_rms": 2.4219,
+  "peak_kappa": 15.708,
+  "lat_acc_rms": 0.0962,
+  "lon_acc_rms": 0.3411
+ }
+}

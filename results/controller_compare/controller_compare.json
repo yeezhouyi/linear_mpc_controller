@@ -1,0 +1,162 @@
+{
+ "straight_offset": {
+  "mpc": {
+   "done_reason": "COMPLETED",
+   "progress_ratio": 0.9757,
+   "e_y_rms": 0.1073,
+   "e_y_p95": 0.279,
+   "end_gap_m": 0.145,
+   "ctrl_variation": 0.002,
+   "latency_p95_us": 4175,
+   "latency_p99_us": 4590,
+   "qp_failures": 0,
+   "fallback_count": 0,
+   "steps": 398,
+   "controller": "mpc",
+   "scenario": "straight_offset"
+  },
+  "pure_pursuit": {
+   "done_reason": "COMPLETED",
+   "progress_ratio": 0.977,
+   "e_y_rms": 0.0618,
+   "e_y_p95": 0.1728,
+   "end_gap_m": 0.137,
+   "ctrl_variation": 0.0054,
+   "latency_p95_us": 187,
+   "latency_p99_us": 401,
+   "qp_failures": "N/A",
+   "fallback_count": "N/A",
+   "steps": 392,
+   "controller": "pure_pursuit",
+   "scenario": "straight_offset"
+  }
+ },
+ "circle": {
+  "mpc": {
+   "done_reason": "COMPLETED",
+   "progress_ratio": 0.9893,
+   "e_y_rms": 0.004,
+   "e_y_p95": 0.0045,
+   "end_gap_m": 0.135,
+   "ctrl_variation": 0.0005,
+   "latency_p95_us": 3395,
+   "latency_p99_us": 4013,
+   "qp_failures": 0,
+   "fallback_count": 0,
+   "steps": 839,
+   "controller": "mpc",
+   "scenario": "circle"
+  },
+  "pure_pursuit": {
+   "done_reason": "COMPLETED",
+   "progress_ratio": 0.9887,
+   "e_y_rms": 0.0011,
+   "e_y_p95": 0.0012,
+   "end_gap_m": 0.143,
+   "ctrl_variation": 0.0005,
+   "latency_p95_us": 349,
+   "latency_p99_us": 469,
+   "qp_failures": "N/A",
+   "fallback_count": "N/A",
+   "steps": 830,
+   "controller": "pure_pursuit",
+   "scenario": "circle"
+  }
+ },
+ "s_curve": {
+  "mpc": {
+   "done_reason": "COMPLETED",
+   "progress_ratio": 0.9839,
+   "e_y_rms": 0.0255,
+   "e_y_p95": 0.0697,
+   "end_gap_m": 0.146,
+   "ctrl_variation": 0.007,
+   "latency_p95_us": 4214,
+   "latency_p99_us": 4542,
+   "qp_failures": 0,
+   "fallback_count": 0,
+   "steps": 607,
+   "controller": "mpc",
+   "scenario": "s_curve"
+  },
+  "pure_pursuit": {
+   "done_reason": "COMPLETED",
+   "progress_ratio": 0.9836,
+   "e_y_rms": 0.0133,
+   "e_y_p95": 0.0351,
+   "end_gap_m": 0.149,
+   "ctrl_variation": 0.0067,
+   "latency_p95_us": 241,
+   "latency_p99_us": 362,
+   "qp_failures": "N/A",
+   "fallback_count": "N/A",
+   "steps": 593,
+   "controller": "pure_pursuit",
+   "scenario": "s_curve"
+  }
+ },
+ "foldback": {
+  "mpc": {
+   "done_reason": "COMPLETED",
+   "progress_ratio": 0.9958,
+   "e_y_rms": 0.0199,
+   "e_y_p95": 0.0501,
+   "end_gap_m": 0.135,
+   "ctrl_variation": 0.0141,
+   "latency_p95_us": 4897,
+   "latency_p99_us": 5260,
+   "qp_failures": 0,
+   "fallback_count": 0,
+   "steps": 1440,
+   "controller": "mpc",
+   "scenario": "foldback"
+  },
+  "pure_pursuit": {
+   "done_reason": "COMPLETED",
+   "progress_ratio": 0.9956,
+   "e_y_rms": 0.0227,
+   "e_y_p95": 0.0613,
+   "end_gap_m": 0.143,
+   "ctrl_variation": 0.0208,
+   "latency_p95_us": 612,
+   "latency_p99_us": 775,
+   "qp_failures": "N/A",
+   "fallback_count": "N/A",
+   "steps": 1328,
+   "controller": "pure_pursuit",
+   "scenario": "foldback"
+  }
+ },
+ "foldback_lag": {
+  "mpc": {
+   "done_reason": "STALL",
+   "progress_ratio": 0.3272,
+   "e_y_rms": 0.0601,
+   "e_y_p95": 0.1441,
+   "end_gap_m": 21.762,
+   "ctrl_variation": 0.0095,
+   "latency_p95_us": 47494,
+   "latency_p99_us": 48821,
+   "qp_failures": 173,
+   "fallback_count": 173,
+   "steps": 701,
+   "controller": "mpc",
+   "scenario": "foldback_lag"
+  },
+  "pure_pursuit": {
+   "done_reason": "COMPLETED",
+   "progress_ratio": 0.9958,
+   "e_y_rms": 0.0196,
+   "e_y_p95": 0.0561,
+   "end_gap_m": 0.135,
+   "ctrl_variation": 0.0231,
+   "latency_p95_us": 682,
+   "latency_p99_us": 897,
+   "qp_failures": "N/A",
+   "fallback_count": "N/A",
+   "steps": 1350,
+   "controller": "pure_pursuit",
+   "scenario": "foldback_lag"
+  }
+ }
+}

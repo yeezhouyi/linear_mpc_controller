@@ -1,0 +1,28 @@
+{
+ "cell": "hybrid_astar|v_min=-0.5|stateful_windowed",
+ "geometry": "hybrid_astar",
+ "v_min": -0.5,
+ "controller_projection_mode": "stateful_windowed",
+ "audit_mode": "accepted",
+ "done_reason": "STALL",
+ "raw_arc_final": 21.116,
+ "accepted_arc_final": 21.153,
+ "progress_ratio": 0.6316,
+ "skipped_arc_ratio": 0.0308,
+ "max_arc_jump": 0.117,
+ "projection_jump_count": 14,
+ "projection_reacquire_count": 13,
+ "e_y_rms": 0.0236,
+ "qp_failures": 0,
+ "v_end": -0.034,
+ "steps": 1201,
+ "path_length_m": 31.932,
+ "reference": "hybrid_astar",
+ "gen_time_ms": 389.1610750000041,
+ "comfort": {
+  "kappa_rms": 2.679,
+  "peak_kappa": 15.987,
+  "lat_acc_rms": 0.1821,
+  "lon_acc_rms": 0.389
+ }
+}

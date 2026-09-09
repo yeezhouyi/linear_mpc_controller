@@ -1,0 +1,15 @@
+{
+ "done_reason": "COMPLETED",
+ "progress_ratio": 0.9958,
+ "e_y_rms": 0.0199,
+ "e_y_p95": 0.0501,
+ "end_gap_m": 0.135,
+ "ctrl_variation": 0.0141,
+ "latency_p95_us": 4897,
+ "latency_p99_us": 5260,
+ "qp_failures": 0,
+ "fallback_count": 0,
+ "steps": 1440,
+ "controller": "mpc",
+ "scenario": "foldback"
+}

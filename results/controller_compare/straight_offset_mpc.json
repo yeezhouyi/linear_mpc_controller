@@ -1,0 +1,15 @@
+{
+ "done_reason": "COMPLETED",
+ "progress_ratio": 0.9757,
+ "e_y_rms": 0.1073,
+ "e_y_p95": 0.279,
+ "end_gap_m": 0.145,
+ "ctrl_variation": 0.002,
+ "latency_p95_us": 4175,
+ "latency_p99_us": 4590,
+ "qp_failures": 0,
+ "fallback_count": 0,
+ "steps": 398,
+ "controller": "mpc",
+ "scenario": "straight_offset"
+}

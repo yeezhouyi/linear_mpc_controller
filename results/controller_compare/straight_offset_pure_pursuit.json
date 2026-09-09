@@ -1,0 +1,15 @@
+{
+ "done_reason": "COMPLETED",
+ "progress_ratio": 0.977,
+ "e_y_rms": 0.0618,
+ "e_y_p95": 0.1728,
+ "end_gap_m": 0.137,
+ "ctrl_variation": 0.0054,
+ "latency_p95_us": 187,
+ "latency_p99_us": 401,
+ "qp_failures": "N/A",
+ "fallback_count": "N/A",
+ "steps": 392,
+ "controller": "pure_pursuit",
+ "scenario": "straight_offset"
+}

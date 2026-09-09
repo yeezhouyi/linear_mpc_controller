@@ -1,0 +1,50 @@
+{
+ "a8_cap": {
+  "completed": 4,
+  "progress": 0.9958,
+  "e_y_rms": 0.0199,
+  "qp_failures": 0.0,
+  "gen_time_ms": -1,
+  "ref_length_m": 32.34,
+  "kappa_rms": 1.6755,
+  "peak_kappa": 6.701,
+  "lat_acc_rms": 0.1894,
+  "lon_acc_rms": 0.1624
+ },
+ "a8_nocap": {
+  "completed": 2,
+  "progress": 0.5533,
+  "e_y_rms": 0.0085,
+  "qp_failures": 45.5,
+  "gen_time_ms": -1,
+  "ref_length_m": 31.5,
+  "kappa_rms": 2.4219,
+  "peak_kappa": 15.708,
+  "lat_acc_rms": 0.0962,
+  "lon_acc_rms": 0.3411
+ },
+ "lattice_frenet": {
+  "completed": 3,
+  "progress": 0.9485,
+  "e_y_rms": 0.0324,
+  "qp_failures": 0.0,
+  "gen_time_ms": 2.5,
+  "ref_length_m": 31.51,
+  "kappa_rms": 2.7493,
+  "peak_kappa": 18.224,
+  "lat_acc_rms": 0.1809,
+  "lon_acc_rms": 0.4807
+ },
+ "hybrid_astar": {
+  "completed": 1,
+  "progress": 0.3909,
+  "e_y_rms": 0.0138,
+  "qp_failures": 46.0,
+  "gen_time_ms": 389.2,
+  "ref_length_m": 31.93,
+  "kappa_rms": 2.679,
+  "peak_kappa": 15.987,
+  "lat_acc_rms": 0.1821,
+  "lon_acc_rms": 0.389
+ }
+}

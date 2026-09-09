@@ -1,0 +1,15 @@
+{
+ "done_reason": "COMPLETED",
+ "progress_ratio": 0.9839,
+ "e_y_rms": 0.0255,
+ "e_y_p95": 0.0697,
+ "end_gap_m": 0.146,
+ "ctrl_variation": 0.007,
+ "latency_p95_us": 4214,
+ "latency_p99_us": 4542,
+ "qp_failures": 0,
+ "fallback_count": 0,
+ "steps": 607,
+ "controller": "mpc",
+ "scenario": "s_curve"
+}

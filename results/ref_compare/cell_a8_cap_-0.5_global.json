@@ -1,0 +1,28 @@
+{
+ "cell": "a8_cap|v_min=-0.5|global_legacy",
+ "geometry": "a8_cap",
+ "v_min": -0.5,
+ "controller_projection_mode": "global_legacy",
+ "audit_mode": "accepted",
+ "done_reason": "COMPLETED",
+ "raw_arc_final": 32.209,
+ "accepted_arc_final": 32.209,
+ "progress_ratio": 0.9958,
+ "skipped_arc_ratio": 0.0,
+ "max_arc_jump": 0.033,
+ "projection_jump_count": 0,
+ "projection_reacquire_count": 0,
+ "e_y_rms": 0.0199,
+ "qp_failures": 0,
+ "v_end": 0.313,
+ "steps": 1440,
+ "path_length_m": 32.344,
+ "reference": "a8_cap",
+ "gen_time_ms": null,
+ "comfort": {
+  "kappa_rms": 1.6755,
+  "peak_kappa": 6.701,
+  "lat_acc_rms": 0.1894,
+  "lon_acc_rms": 0.1624
+ }
+}

@@ -1,0 +1,28 @@
+{
+ "cell": "hybrid_astar|v_min=-0.5|global_legacy",
+ "geometry": "hybrid_astar",
+ "v_min": -0.5,
+ "controller_projection_mode": "global_legacy",
+ "audit_mode": "accepted",
+ "done_reason": "COMPLETED",
+ "raw_arc_final": 31.783,
+ "accepted_arc_final": 31.783,
+ "progress_ratio": 0.9331,
+ "skipped_arc_ratio": 0.0622,
+ "max_arc_jump": 0.271,
+ "projection_jump_count": 14,
+ "projection_reacquire_count": 0,
+ "e_y_rms": 0.0381,
+ "qp_failures": 0,
+ "v_end": 0.253,
+ "steps": 1443,
+ "path_length_m": 31.932,
+ "reference": "hybrid_astar",
+ "gen_time_ms": 389.1610750000041,
+ "comfort": {
+  "kappa_rms": 2.679,
+  "peak_kappa": 15.987,
+  "lat_acc_rms": 0.1821,
+  "lon_acc_rms": 0.389
+ }
+}

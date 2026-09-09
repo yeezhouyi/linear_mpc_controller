@@ -1,0 +1,15 @@
+{
+ "done_reason": "STALL",
+ "progress_ratio": 0.3272,
+ "e_y_rms": 0.0601,
+ "e_y_p95": 0.1441,
+ "end_gap_m": 21.762,
+ "ctrl_variation": 0.0095,
+ "latency_p95_us": 47494,
+ "latency_p99_us": 48821,
+ "qp_failures": 173,
+ "fallback_count": 173,
+ "steps": 701,
+ "controller": "mpc",
+ "scenario": "foldback_lag"
+}

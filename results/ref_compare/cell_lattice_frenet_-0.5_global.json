@@ -1,0 +1,28 @@
+{
+ "cell": "lattice_frenet|v_min=-0.5|global_legacy",
+ "geometry": "lattice_frenet",
+ "v_min": -0.5,
+ "controller_projection_mode": "global_legacy",
+ "audit_mode": "accepted",
+ "done_reason": "COMPLETED",
+ "raw_arc_final": 31.362,
+ "accepted_arc_final": 31.362,
+ "progress_ratio": 0.9491,
+ "skipped_arc_ratio": 0.0462,
+ "max_arc_jump": 0.079,
+ "projection_jump_count": 29,
+ "projection_reacquire_count": 0,
+ "e_y_rms": 0.0272,
+ "qp_failures": 0,
+ "v_end": 0.307,
+ "steps": 1441,
+ "path_length_m": 31.509,
+ "reference": "lattice_frenet",
+ "gen_time_ms": 2.5267930000154593,
+ "comfort": {
+  "kappa_rms": 2.7493,
+  "peak_kappa": 18.224,
+  "lat_acc_rms": 0.1809,
+  "lon_acc_rms": 0.4807
+ }
+}

@@ -1,0 +1,28 @@
+{
+ "cell": "lattice_frenet|v_min=-0.5|stateful_windowed",
+ "geometry": "lattice_frenet",
+ "v_min": -0.5,
+ "controller_projection_mode": "stateful_windowed",
+ "audit_mode": "accepted",
+ "done_reason": "COMPLETED",
+ "raw_arc_final": 31.391,
+ "accepted_arc_final": 31.391,
+ "progress_ratio": 0.9479,
+ "skipped_arc_ratio": 0.0483,
+ "max_arc_jump": 0.087,
+ "projection_jump_count": 24,
+ "projection_reacquire_count": 19,
+ "e_y_rms": 0.0377,
+ "qp_failures": 0,
+ "v_end": 0.183,
+ "steps": 1713,
+ "path_length_m": 31.509,
+ "reference": "lattice_frenet",
+ "gen_time_ms": 2.5267930000154593,
+ "comfort": {
+  "kappa_rms": 2.7493,
+  "peak_kappa": 18.224,
+  "lat_acc_rms": 0.1809,
+  "lon_acc_rms": 0.4807
+ }
+}
