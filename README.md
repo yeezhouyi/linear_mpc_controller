@@ -2,7 +2,8 @@
 
 差分底盘**线性时变 MPC 轨迹跟踪控制器**——`mpc_controller`（v0.2.1，ros2_control 线性 MPC 插件）的进阶项目，
 > **仓库导航**：默认展示 = `main` @ `v0.3.0-engineered`（2026-09-09 参考可行性增强封板）；
-> 历史研发线 `postseal2-planner-feasibility-20260909`、`cloud-*`、`main-seal-doc-*` 保留为工程证据。
+> 历史证据由归档 tag 承载：`cloud-seal-20260908`、`postseal-20260908`、`postseal2-20260909`、
+> `archive-rescue-be39ffe`、`baseline-19317dfa`（保留作工程证据，不随 main 演进）。
 > 封板口径：对外数字唯一来源 = `ros2_tunnel_explorer` 的
 > `docs/seal_results.json` @ `v1.0.0-sealed`（README 与简历同源渲染）；
 > 本仓封板主张见文末「Day 10 封板主张」表。**残差 RL 支线已冻结，不作为投递主张**
@@ -22,13 +23,13 @@
 | **轨迹工具** | `trajectory_tools/`：直线/圆/S/U-turn 生成器 + 位姿补全曲率/速度 | ✅ |
 | **基准工具** | `benchmark_tools/`：RMSE/p95/max + QP 统计 + run manifest | ✅ 基线见下 |
 | **C++/Eigen 核心** | `include/ src/`（model/mpc/safety，U2–U4 结构） | ✅ **WSL2 门槛通过**：`cmake -DBUILD_TESTING=ON` 构建 + ctest 全绿 |
-| **ROS2 层** | `ros2/`（linear_mpc_node / trajectory_adapter / velocity_arbiter）+ launch/config/worlds + `test/test_ros_contract.py` | ✅ WSL2 `colcon build` 绿；契约测试 5/5 绿；launch 已修复为按安装 share 目录解析 world/config（OpaqueFunction）；**Gazebo TurtleBot3 闭环冒烟待跑（U5/C3 验收项）** |
+| **ROS2 层** | `ros2/`（linear_mpc_node / trajectory_adapter / velocity_arbiter）+ launch/config/worlds + `test/test_ros_contract.py` | ✅ WSL2 `colcon build` 绿；契约测试 5/5 绿；launch 已修复为按安装 share 目录解析 world/config（OpaqueFunction）；**Gazebo TurtleBot3 闭环冒烟 PASS**（circle 证据 + 复现说明 = `results/mpc_smoke_20260909/circle/`：tb3_smoke.json / REPRODUCE.md / SHA256SUMS；straight 证据 `results/mpc_smoke_20260909/straight/`；生成 `bash scripts/tb3_smoke.sh`；校验 `sha256sum -c results/mpc_smoke_20260909/circle/SHA256SUMS`） |
 | **RL 环境** | `mpc_rl_env/`：fast env + `gym_adapter`（SB3 env_checker 绿）+ PPO 训练入口 + config | ✅ 契约/奖励/投影/gym 适配测试全绿（系统 python 跳过 gym 测试，mc_venv 全绿）；**残差 PPO 已冻结 / 停止训练**（仅保留环境、契约与测试；不作为投递主张） |
 | **系统辨识** | `system_identification/`：一阶滞后 + 延迟拟合（独立验证集） | ✅ 测试绿 |
 
 ## 参考核心基线（纯 MPC，离线，无扰动）
 
-`python benchmark_tools/scripts/run_reference_benchmark.py`（结果归档于 `results/ref_core_baseline/`）：
+`python benchmark_tools/scripts/run_reference_benchmark.py`（可复现；参数/commit 清单 = `results/ref_core_baseline/run_manifest.json`）：
 
 | track | done | e_y_rms | e_y_p95 | e_y_max | e_psi_rms | qp_mean(us) | qp_fail | fallback |
 |---|---|---|---|---|---|---|---|---|
@@ -54,7 +55,7 @@ python benchmark_tools/scripts/run_reference_benchmark.py --runs 1 --outdir outp
 
 依赖：numpy、pyyaml、pytest（均无第三方 QP 库需求；求解器为自带稠密 ADMM）。
 
-## WSL2 / ROS2 门槛（待办，与计划 C2→C5 对齐）
+## WSL2 / ROS2 门槛（状态记录：门槛已在 WSL2 通过，下方命令为复现路径）
 
 ```bash
 # 1) ROS-free C++ 核心（仅 Eigen）
@@ -79,7 +80,9 @@ python mpc_rl_env/algorithms/train_ppo_residual.py --seed 0
   参考准备层/离线 + 单一生产入口（`adapter_pipeline.prepare_tracker_reference`）；ROS
   `trajectory_server` 分发路径**未接线**该入口（集成边界）。
 - 无硬实时声明：含 Gazebo TurtleBot3 闭环冒烟在内均为 WSL2/Gazebo 仿真结果。
-- 最终验收、复现命令与冒烟证据：`docs/reference_feasibility_final.md`（`v0.3.0-engineered`）。
+- 最终验收、复现命令与冒烟证据：`docs/reference_feasibility_final.md`（`v0.3.0-engineered`）；
+  circle 冒烟机器可读记录 = `results/mpc_smoke_20260909/circle/tb3_smoke.json`（PASS）；
+  复现 / 校验说明 = `results/mpc_smoke_20260909/circle/REPRODUCE.md`。
 
 ## 目录
 
@@ -110,7 +113,7 @@ results/             参考核心基线归档
 | PPO v2（**已冻结**） | 不重训、不收口；判定与复活条件见 `docs/residual_rl_postmortem.md`,历史判定 `results/eval_residual_c8_iter2/` | 冻结 |
 
 分层声明:以上全部为 WSL2/Gazebo 仿真结果,不含真实硬件声明。
-## Day 10 封板主张(2026-09-08,canonical 来源 = ros2_tunnel_explorer `docs/seal_results.json` @ bline-merge b43760b)
+## Day 10 封板主张(2026-09-08,canonical 来源 = ros2_tunnel_explorer `docs/seal_results.json` @ `v1.0.0-sealed` = b162fc1)
 
 > 本节的对外主张与简历/README 表同源渲染于该单份 JSON(含复现命令与 SHA);
 > 单独改动此处数字即为口径违规。
@@ -118,7 +121,7 @@ results/             参考核心基线归档
 | 主张 | 要点 | 证据 |
 |---|---|---|
 | A5 有状态投影 + 接受门 | Frenet 窗口化投影 + 位移预算接受门替代无状态全局最近点,消除折返车道误吸附(A5.1/A5.2/A4.2,含 C++ 镜像) | `mpc_core/` + `test_reacquire`/`test_controller_gate`(eddcf11 线) |
-| 12 格消融矩阵 | 3 几何 × 2 v_min × 2 投影模式;失效轴 = 几何与 v_min **非投影实现**(10/12 格跨模式逐位相同) → 无需机动生成层 | `results/a8_replay/MATRIX.md` + cell_*.json(be39ffe/85276e3) |
+| 12 格消融矩阵 | 3 几何 × 2 v_min × 2 投影模式;失效轴 = 几何与 v_min **非投影实现**(10/12 格跨模式逐位相同) → 无需机动生成层 | `results/a8_replay/MATRIX.md` + cell_*.json(be39ffe/85276e3) + `rescue_vs_main_matrix_diff.md`（旧口径 0.631 差异记录，be39ffe = `archive-rescue-be39ffe`） |
 | 运动学可行性审计 | 原始计划 16/250 参考点超 ω_max=2.0;修复判据 `v ≤ ω_max/\|κ\|` 已实现 + `omega_violations` 守卫 | `trajectory_tools/curvature_estimator.py`(85276e3) |
 | 跨语言 golden 对拍 | projection_golden.json 双端消费逐位一致 | `ctest projection_golden` + pytest parity(eddcf11) |
 | B6B Nav2 插件 | pluginlib 加载 + 生命周期 1 4/4/直线 7/7/弧线 8/8;分级失效契约;位姿变换进路径系;终端减速负向对照 intact 1.98 m vs 去除 13.14–13.16 m(Δ11.18 m) | `ros2/nav2_mpc_controller.*` + `scripts/nc_b6b_negative.sh`(ce0a256/855f846/4c2bcce) |

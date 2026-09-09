@@ -1,0 +1,15 @@
+{
+ "result": "PASS",
+ "samples": 2658,
+ "path_points": 604,
+ "driven_m": 20.7,
+ "mean_speed_mps": 0.23,
+ "dist_median_m": 0.0086,
+ "dist_p95_m": 0.0342,
+ "in_band_frac": 1.0,
+ "thresholds": {
+  "median_le_m": 0.3,
+  "in_band_ge": 0.85,
+  "driven_ge_m": 3.0
+ }
+}
