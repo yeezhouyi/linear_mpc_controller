@@ -11,6 +11,6 @@
 | 4 | 性能可测量 | ✅（部分） | 每控制周期 diag：qp_time_us、qp_iterations、fallback、constraint_violation；controller_compare 表已报 p95/p99 | 投影与 QP 构建/求解的分项计时未拆分——记为待办（先指出大头再优化） |
 | 5 | 回归测试自动执行 | ✅ | 91 pytest（模型/QP/门控/golden/矩阵）+ 7 C++ gtest + `test_qp_golden`/`test_projection_golden` 数值对拍 + a8 12 格闭环矩阵回归；`pytest`/`colcon test` 单入口，失败非零退出 | 无 |
 | 6 | ROS2 稳定使用入口 | ✅（部分） | `linear_mpc_node`（lifecycle）+ `nav2_mpc_controller` 插件 + `trajectory_server`（换路径）+ `velocity_arbiter`（单写者，结构性契约测试）；config/linear_mpc_params.yaml | 面向外部的最小 quickstart 文档未成文——记为待办 |
-| 7 | CI | ✅（本批新增） | `.github/workflows/ci.yml`：job1 无 ROS 核心测试；job2 ros:jazzy 容器 colcon build+test | 首跑结果待观察 |
+| 7 | CI | ✅（本批新增） | `.github/workflows/ci.yml`：job1 无 ROS 核心测试；job2 ros:jazzy 容器 colcon build+test | 首跑 GREEN（2026-09-09） |
 
 已核验的诚实失败记录（保留为亮点，不在本表展开）：执行滞后 0.15 s 下 QP 连续不可行→STALL（`docs/controller_compare.md`），滞后补偿为开放候选修复。
