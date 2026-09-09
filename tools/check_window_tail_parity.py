@@ -9,12 +9,13 @@ mid-path, just-before-the-end, and past-the-end.
 Before the fix the C++ tail after the end crossing sampled the path START,
 so the near/past rows diverged from python; the regression is caught here.
 
-Usage: python3 tools/check_window_tail_parity.py [path-to-window_tail_dump]
+Usage: python3 tools/check_window_tail_parity.py <path-to-window_tail_dump>
+       (the dump path is REQUIRED; a missing binary is an ERROR,
+       never a silent pass)
 """
 from __future__ import annotations
 
 import math
-import os
 import pathlib
 import subprocess
 import sys
@@ -24,8 +25,6 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 from mpc_core.model import build_ltv_window, reference_state_vector  # noqa: E402
 from mpc_core.types import Trajectory  # noqa: E402
 
-REPO = pathlib.Path(__file__).resolve().parents[1]
-
 DS = 0.01
 L1 = 2.0
 R = 1.0
@@ -33,22 +32,6 @@ ANGLE = 1.5
 TS = 0.05
 N = 8
 TOL = 1e-6
-
-
-def find_binary() -> pathlib.Path | None:
-    env = os.environ.get("WINDOW_TAIL_DUMP")
-    if env:
-        return pathlib.Path(env)
-    cands = [
-        pathlib.Path(sys.argv[1]) if len(sys.argv) > 1 else None,
-        REPO / "build_core" / "window_tail_dump",
-        pathlib.Path("/home/zhouyi/ros2_ws/build/linear_mpc_controller/window_tail_dump"),
-        pathlib.Path.cwd() / "window_tail_dump",
-    ]
-    for c in cands:
-        if c is not None and c.exists():
-            return c
-    return None
 
 
 def make_path() -> Trajectory:
@@ -73,11 +56,10 @@ def make_path() -> Trajectory:
     return Trajectory(s=s, x=x, y=y, yaw=yaw, kappa=kappa, v=v)
 
 
-def main() -> int:
-    bin_path = find_binary()
-    if bin_path is None:
-        print("skip: window_tail_dump not built")
-        return 0
+def main(bin_path: pathlib.Path) -> int:
+    if not bin_path.is_file():
+        print(f"window_tail_parity: FAIL dump binary not found: {bin_path}")
+        return 1
     traj = make_path()
     end = traj.s[-1]
     cases = [("mid", 1.0), ("near", end - 0.10), ("past", end + 0.30)]
@@ -114,4 +96,7 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    if len(sys.argv) < 2:
+        print("usage: check_window_tail_parity.py <path-to-window_tail_dump>")
+        sys.exit(2)
+    sys.exit(main(pathlib.Path(sys.argv[1])))

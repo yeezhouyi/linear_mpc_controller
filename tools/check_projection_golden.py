@@ -7,11 +7,12 @@ repository and is the single source of truth for both languages.  This script
   1. checks the C++ window/gate parameter defaults against the golden header
      (a silent drift of either side's defaults fails here, not in the field);
   2. replays each committed pose sequence through the C++ chain
-     (build_core/projection_golden_dump) and compares every record
+     (the dump binary path is REQUIRED as argv[1]; CMake passes
+     $<TARGET_FILE:projection_golden_dump>) and compares every record
      (stage / raw_arc / seg / e_y / accepted_arc) against the committed values.
 
-Skips (exit 0) when the dump binary is not built, so a plain CMake configure
-without the tool target does not look like a pass.
+A missing dump binary is an ERROR (exit 1) -- never a silent pass.  No
+path argument at all is exit 2.
 """
 from __future__ import annotations
 
@@ -23,7 +24,6 @@ import tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 GOLDEN = ROOT / "mpc_core" / "tests" / "data" / "projection_golden.json"
-BIN = ROOT / "build_core" / "projection_golden_dump"
 
 TOL_ARC = 1e-6
 TOL_EY = 1e-6
@@ -43,10 +43,10 @@ def parse_params_header(line: str) -> dict:
     return out
 
 
-def main() -> int:
-    if not BIN.exists():
-        print(f"SKIP: {BIN} not built")
-        return 0
+def main(bin_path: pathlib.Path) -> int:
+    if not bin_path.is_file():
+        print(f"projection_golden: FAIL dump binary not found: {bin_path}")
+        return 1
     golden = json.loads(GOLDEN.read_text())
     gparams = golden["params"]
     problems: list[str] = []
@@ -59,7 +59,7 @@ def main() -> int:
             poses.write_text(
                 "\n".join(f"{p[0]} {p[1]} {p[2]}" for p in (r["pose"] for r in records))
             )
-            subprocess.run([str(BIN), name, str(poses), str(out)], check=True)
+            subprocess.run([str(bin_path), name, str(poses), str(out)], check=True)
             lines = [ln for ln in out.read_text().splitlines() if ln.strip()]
             header = parse_params_header(lines[0])
             body = lines[1:]
@@ -106,4 +106,7 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    if len(sys.argv) < 2:
+        print("usage: check_projection_golden.py <projection_golden_dump>")
+        sys.exit(2)
+    sys.exit(main(pathlib.Path(sys.argv[1])))

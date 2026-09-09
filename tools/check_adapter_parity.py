@@ -12,7 +12,9 @@ reduces to the python rule
 (i.e. the two are compared on the same documented rule).  The test then
 asserts the shared invariant max|kappa*v| <= omega_max on BOTH sides.
 
-Skips (exit 0) when the dump binary is not built.
+The dump binary path is REQUIRED as argv[1] (CMake passes
+$<TARGET_FILE:adapter_speed_dump>).  A missing binary is an ERROR
+(exit 1); no argument is exit 2.
 """
 from __future__ import annotations
 
@@ -38,27 +40,15 @@ N = 72
 TOL = 1e-6
 
 
-def find_binary() -> Path | None:
-    for cand in (
-        ROOT / "build_core" / "adapter_speed_dump",
-        Path("/home/zhouyi/lmpc_ws/build/linear_mpc_controller/adapter_speed_dump"),
-        Path("/home/zhouyi/ros2_ws/build/linear_mpc_controller/adapter_speed_dump"),
-    ):
-        if cand.exists():
-            return cand
-    return None
-
-
 def circle_xy():
     th = np.linspace(0.0, 2.0 * math.pi, N, endpoint=False)
     return R * np.cos(th), R * np.sin(th)
 
 
-def main() -> int:
-    bin_path = find_binary()
-    if bin_path is None:
-        print("skip: adapter_speed_dump not built")
-        return 0
+def main(bin_path: Path) -> int:
+    if not bin_path.is_file():
+        print(f"adapter_speed_parity: FAIL dump binary not found: {bin_path}")
+        return 1
 
     out = subprocess.run(
         [str(bin_path), "%.6f" % OMEGA_MAX, "%.6f" % OMEGA_MAX],
@@ -101,4 +91,7 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    if len(sys.argv) < 2:
+        print("usage: check_adapter_parity.py <adapter_speed_dump>")
+        sys.exit(2)
+    raise SystemExit(main(Path(sys.argv[1])))

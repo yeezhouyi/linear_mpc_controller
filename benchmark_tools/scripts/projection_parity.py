@@ -2,11 +2,14 @@
 """A7.2 #5 cross-language projection parity harness.
 
 Generates identical pose sequences on straight / circle / fold trajectories,
-runs the C++ windowed chain (build_core/projection_parity_dump) and the
-Python reference (mpc_core.frenet.closest_point with the same s_prev
-chaining) and compares per-pose (stage, arc, seg, e_y).
+runs the C++ windowed chain (dump path REQUIRED as argv[1]; CMake passes
+$<TARGET_FILE:projection_parity_dump>) and the Python reference
+(mpc_core.frenet.closest_point with the same s_prev chaining) and compares
+per-pose (stage, arc, seg, e_y).
 
-Usage: python3 benchmark_tools/scripts/projection_parity.py
+A missing dump binary is an ERROR (exit 1); no argument is exit 2.
+
+Usage: python3 benchmark_tools/scripts/projection_parity.py <projection_parity_dump>
 """
 from __future__ import annotations
 
@@ -22,9 +25,6 @@ import numpy as np  # noqa: E402
 
 from mpc_core.frenet import closest_point  # noqa: E402
 from mpc_core.types import Trajectory  # noqa: E402
-
-BIN = pathlib.Path(__file__).resolve().parents[2] / "build_core" / "projection_parity_dump"
-ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 
 def make_straight(length=8.0, ds=0.02):
@@ -75,12 +75,12 @@ def python_chain(traj, poses):
     return recs
 
 
-def run_cpp(kind, poses):
+def run_cpp(bin_path, kind, poses):
     with tempfile.TemporaryDirectory() as td:
         tp = pathlib.Path(td) / "poses.txt"
         op = pathlib.Path(td) / "out.txt"
         tp.write_text("\n".join(f"{p[0]:.9f} {p[1]:.9f} {p[2]:.9f}" for p in poses))
-        subprocess.run([str(BIN), kind, str(tp), str(op)], check=True)
+        subprocess.run([str(bin_path), kind, str(tp), str(op)], check=True)
         recs = []
         for line in op.read_text().splitlines():
             st, arc, seg, ey = line.split()
@@ -121,13 +121,13 @@ def pose_sets():
     return out
 
 
-def main():
-    if not BIN.exists():
-        print("SKIP: build_core/projection_parity_dump not built")
-        return 0
+def main(bin_path):
+    if not bin_path.is_file():
+        print(f"parity: FAIL dump binary not found: {bin_path}")
+        return 1
     total, agree, mismatches = 0, 0, []
     for name, (traj, poses) in pose_sets().items():
-        cpp = run_cpp({"straight": "straight", "circle": "circle", "fold": "fold"}[name], poses)
+        cpp = run_cpp(bin_path, {"straight": "straight", "circle": "circle", "fold": "fold"}[name], poses)
         py = python_chain(traj, poses)
         assert len(cpp) == len(py)
         for i, (c, p) in enumerate(zip(cpp, py)):
@@ -147,4 +147,7 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    if len(sys.argv) < 2:
+        print("usage: projection_parity.py <projection_parity_dump>")
+        sys.exit(2)
+    sys.exit(main(pathlib.Path(sys.argv[1])))
