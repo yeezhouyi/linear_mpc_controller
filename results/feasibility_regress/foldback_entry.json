@@ -1,0 +1,11 @@
+{
+ "scenario": "foldback",
+ "ref_variant": "entry",
+ "done_reason": "COMPLETED",
+ "progress_ratio": 0.9956,
+ "e_y_rms": 0.0103,
+ "e_y_p95": 0.0273,
+ "qp_failures": 0,
+ "steps": 2231,
+ "v_last": 0.2378
+}

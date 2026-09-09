@@ -1,0 +1,30 @@
+[
+ {
+  "scenario": "straight_offset",
+  "v_last_ref": 0.0,
+  "brake_samples": 2,
+  "s_last": 5.95,
+  "accel_ok": true
+ },
+ {
+  "scenario": "circle",
+  "v_last_ref": 0.0,
+  "brake_samples": 2,
+  "s_last": 12.6,
+  "accel_ok": true
+ },
+ {
+  "scenario": "s_curve",
+  "v_last_ref": 0.0,
+  "brake_samples": 2,
+  "s_last": 9.054,
+  "accel_ok": true
+ },
+ {
+  "scenario": "foldback",
+  "v_last_ref": 0.0,
+  "brake_samples": 30,
+  "s_last": 32.323,
+  "accel_ok": true
+ }
+]

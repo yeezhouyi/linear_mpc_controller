@@ -1,0 +1,11 @@
+{
+ "scenario": "straight_offset",
+ "ref_variant": "entry",
+ "done_reason": "COMPLETED",
+ "progress_ratio": 0.9748,
+ "e_y_rms": 0.1071,
+ "e_y_p95": 0.2788,
+ "qp_failures": 0,
+ "steps": 399,
+ "v_last": 0.2417
+}

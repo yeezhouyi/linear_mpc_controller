@@ -1,0 +1,11 @@
+{
+ "scenario": "circle",
+ "ref_variant": "entry",
+ "done_reason": "COMPLETED",
+ "progress_ratio": 0.9888,
+ "e_y_rms": 0.004,
+ "e_y_p95": 0.0045,
+ "qp_failures": 0,
+ "steps": 840,
+ "v_last": 0.2371
+}
