@@ -64,6 +64,19 @@ if(BUILD_TESTING)
   add_executable(test_reacquire test/test_reacquire.cpp)
   target_link_libraries(test_reacquire PRIVATE linear_mpc_core)
   add_test(NAME reacquire COMMAND test_reacquire)
+  # ---- review-fix gates (2026-09-09) ---------------------------------
+  add_executable(test_odom_staleness test/test_odom_staleness.cpp)
+  target_link_libraries(test_odom_staleness PRIVATE linear_mpc_core)
+  add_test(NAME odom_staleness COMMAND test_odom_staleness)
+  add_executable(test_window_end test/test_window_end.cpp)
+  target_link_libraries(test_window_end PRIVATE linear_mpc_core)
+  add_test(NAME window_end COMMAND test_window_end)
+  # Cross-language LTV-window-tail parity (python reference).
+  add_executable(window_tail_dump tools/window_tail_dump.cpp)
+  target_link_libraries(window_tail_dump PRIVATE linear_mpc_core)
+  add_test(NAME window_tail_parity
+    COMMAND ${Python3_EXECUTABLE}
+      ${CMAKE_CURRENT_SOURCE_DIR}/tools/check_window_tail_parity.py)
   # A5B.4: C++ consumer of the signed-in projection golden (A7.2 #5).
   add_executable(projection_golden_dump tools/projection_golden_dump.cpp)
   target_link_libraries(projection_golden_dump PRIVATE linear_mpc_core)

@@ -43,43 +43,43 @@ void LinearMpcNav2Controller::configure(
     base_frame_id_ = costmap_ros->getBaseFrameID();
   }
   nav2_util::declare_parameter_if_not_declared(
-    node, name + ".odom_frame_id", rclcpp::ParameterValue("odom"));
+    node, plugin_name_ + ".odom_frame_id", rclcpp::ParameterValue("odom"));
   nav2_util::declare_parameter_if_not_declared(
-    node, name + ".Ts", rclcpp::ParameterValue(0.05));
+    node, plugin_name_ + ".Ts", rclcpp::ParameterValue(0.05));
   nav2_util::declare_parameter_if_not_declared(
-    node, name + ".N", rclcpp::ParameterValue(25));
+    node, plugin_name_ + ".N", rclcpp::ParameterValue(25));
   nav2_util::declare_parameter_if_not_declared(
-    node, name + ".v_max", rclcpp::ParameterValue(0.5));
+    node, plugin_name_ + ".v_max", rclcpp::ParameterValue(0.5));
   nav2_util::declare_parameter_if_not_declared(
-    node, name + ".v_min", rclcpp::ParameterValue(0.0));
+    node, plugin_name_ + ".v_min", rclcpp::ParameterValue(0.0));
   nav2_util::declare_parameter_if_not_declared(
-    node, name + ".omega_max", rclcpp::ParameterValue(2.0));
+    node, plugin_name_ + ".omega_max", rclcpp::ParameterValue(2.0));
   nav2_util::declare_parameter_if_not_declared(
-    node, name + ".a_max", rclcpp::ParameterValue(1.0));
+    node, plugin_name_ + ".a_max", rclcpp::ParameterValue(1.0));
   nav2_util::declare_parameter_if_not_declared(
-    node, name + ".qp_max_iter", rclcpp::ParameterValue(1500));
+    node, plugin_name_ + ".qp_max_iter", rclcpp::ParameterValue(1500));
   nav2_util::declare_parameter_if_not_declared(
-    node, name + ".terminal_stop_margin", rclcpp::ParameterValue(0.20));
+    node, plugin_name_ + ".terminal_stop_margin", rclcpp::ParameterValue(0.20));
   nav2_util::declare_parameter_if_not_declared(
-    node, name + ".qp_fail_max", rclcpp::ParameterValue(3));
+    node, plugin_name_ + ".qp_fail_max", rclcpp::ParameterValue(3));
   nav2_util::declare_parameter_if_not_declared(
-    node, name + ".ambiguous_max", rclcpp::ParameterValue(5));
+    node, plugin_name_ + ".ambiguous_max", rclcpp::ParameterValue(5));
   nav2_util::declare_parameter_if_not_declared(
-    node, name + ".tf_tolerance", rclcpp::ParameterValue(0.2));
+    node, plugin_name_ + ".tf_tolerance", rclcpp::ParameterValue(0.2));
 
-  odom_frame_id_ = node->get_parameter(name + ".odom_frame_id").as_string();
-  params_.Ts = node->get_parameter(name + ".Ts").as_double();
-  params_.N = node->get_parameter(name + ".N").as_int();
-  params_.v_max = node->get_parameter(name + ".v_max").as_double();
-  params_.v_min = node->get_parameter(name + ".v_min").as_double();
-  params_.omega_max = node->get_parameter(name + ".omega_max").as_double();
-  params_.a_max = node->get_parameter(name + ".a_max").as_double();
-  params_.qp_max_iter = node->get_parameter(name + ".qp_max_iter").as_int();
+  odom_frame_id_ = node->get_parameter(plugin_name_ + ".odom_frame_id").as_string();
+  params_.Ts = node->get_parameter(plugin_name_ + ".Ts").as_double();
+  params_.N = node->get_parameter(plugin_name_ + ".N").as_int();
+  params_.v_max = node->get_parameter(plugin_name_ + ".v_max").as_double();
+  params_.v_min = node->get_parameter(plugin_name_ + ".v_min").as_double();
+  params_.omega_max = node->get_parameter(plugin_name_ + ".omega_max").as_double();
+  params_.a_max = node->get_parameter(plugin_name_ + ".a_max").as_double();
+  params_.qp_max_iter = node->get_parameter(plugin_name_ + ".qp_max_iter").as_int();
   terminal_stop_margin_ =
-    node->get_parameter(name + ".terminal_stop_margin").as_double();
-  qp_fail_max_ = node->get_parameter(name + ".qp_fail_max").as_int();
-  ambiguous_max_ = node->get_parameter(name + ".ambiguous_max").as_int();
-  tf_tolerance_ = node->get_parameter(name + ".tf_tolerance").as_double();
+    node->get_parameter(plugin_name_ + ".terminal_stop_margin").as_double();
+  qp_fail_max_ = node->get_parameter(plugin_name_ + ".qp_fail_max").as_int();
+  ambiguous_max_ = node->get_parameter(plugin_name_ + ".ambiguous_max").as_int();
+  tf_tolerance_ = node->get_parameter(plugin_name_ + ".tf_tolerance").as_double();
 
   RCLCPP_INFO(
     logger_,
@@ -185,22 +185,16 @@ geometry_msgs::msg::TwistStamped LinearMpcNav2Controller::computeVelocityCommand
       return stop;
     }
   }
-  if (res.qp_status == QpSolution::Status::kFailed) {
-    ++qp_fail_run_;
-    if (qp_fail_run_ > qp_fail_max_) {
-      has_plan_ = false;
-      controller_.reset();
-      throw nav2_core::NoValidControl("B6B: QP failed beyond qp_fail_max");
-    }
-  } else if (qp_fail_run_ > 0 && res.qp_status == QpSolution::Status::kSolved) {
-    --qp_fail_run_;   // recovery credit
-  }
-
-  geometry_msgs::msg::TwistStamped cmd;
-  cmd.header.stamp = pose.header.stamp;
-  cmd.header.frame_id = base_frame_id_;
-
+  // ---- A4.2 seeking / probation handled FIRST (review fix) -----------
+  // SEEKING runs NO QP: the core returns early and qp_status keeps its
+  // default kFailed.  Counting that toward qp_fail_max would clear the
+  // controller after a few seeking cycles instead of letting the reacquire
+  // protocol time out on its own (reacquire_timeout_steps).  Probation DOES
+  // run the QP but is also self-bounded -- inside it we NEVER throw.
   if (res.reacquire_seeking || res.in_probation) {
+    geometry_msgs::msg::TwistStamped cmd;
+    cmd.header.stamp = pose.header.stamp;
+    cmd.header.frame_id = base_frame_id_;
     // A4.2: bounded decel-to-zero / probation -- return zero-or-capped,
     // NEVER throw (bounded by reacquire_timeout_steps / probation_steps).
     double v_allow = params_.v_max;
@@ -226,6 +220,18 @@ geometry_msgs::msg::TwistStamped LinearMpcNav2Controller::computeVelocityCommand
     last_cmd_v_ = cmd.twist.linear.x;
     last_cmd_w_ = cmd.twist.angular.z;
     return cmd;
+  }
+
+  // ---- B6B.2 QP-failure contract (normal tracking only) --------------
+  if (res.qp_status == QpSolution::Status::kFailed) {
+    ++qp_fail_run_;
+    if (qp_fail_run_ > qp_fail_max_) {
+      has_plan_ = false;
+      controller_.reset();
+      throw nav2_core::NoValidControl("B6B: QP failed beyond qp_fail_max");
+    }
+  } else if (qp_fail_run_ > 0 && res.qp_status == QpSolution::Status::kSolved) {
+    --qp_fail_run_;   // recovery credit
   }
 
   // ---- B6B.1: two independent speed limits, take the min -------------
@@ -254,6 +260,9 @@ geometry_msgs::msg::TwistStamped LinearMpcNav2Controller::computeVelocityCommand
     std::sqrt(2.0 * std::max(params_.a_max, 1e-6) * remaining);
   v = std::clamp(v, -v_term, v_term);
 
+  geometry_msgs::msg::TwistStamped cmd;
+  cmd.header.stamp = pose.header.stamp;
+  cmd.header.frame_id = base_frame_id_;
   cmd.twist.linear.x = v;
   cmd.twist.angular.z = w;
   last_cmd_v_ = v;

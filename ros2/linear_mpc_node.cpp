@@ -22,6 +22,7 @@
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp_lifecycle/lifecycle_node.hpp"
 #include "trajectory_adapter.hpp"
+#include "linear_mpc_controller/safety/odom_staleness.hpp"
 #include "std_msgs/msg/float64_multi_array.hpp"
 
 namespace linear_mpc_controller
@@ -75,6 +76,17 @@ public:
       "/odom", rclcpp::SensorDataQoS(),
       [this](nav_msgs::msg::Odometry::SharedPtr msg) {
         last_odom_ = *msg;
+        // R9 freshness bookkeeping: monotonic stamp, last receipt time.
+        const rclcpp::Time t(msg->header.stamp);
+        const bool valid = (t.nanoseconds() != 0);
+        if (have_odom_ && odom_stamp_valid_ && valid) {
+          odom_backwards_ = (t < odom_stamp_);   // time jump backward
+        } else if (valid) {
+          odom_backwards_ = false;               // first stamp / new epoch
+        }
+        odom_stamp_ = t;
+        odom_stamp_valid_ = valid;
+        last_odom_recv_ = now();
         have_odom_ = true;
       });
     traj_sub_ = create_subscription<nav_msgs::msg::Path>(
@@ -111,9 +123,21 @@ private:
     if (!have_odom_) return;  // wait for state; no output (R9)
     const auto & o = last_odom_.pose.pose;
     const auto & tw = last_odom_.twist.twist;
+    // R9 odom freshness gate: max_age applies to the odom STAMP (a frozen
+    // stamp is detected because now() advances while it does not); an
+    // unstamped driver falls back to the receipt gap; a backwards stamp is
+    // stale.  Output is zero speed with a current stamp, per the interface
+    // contract ("state too old -> zero velocity").
+    const double since_recv_s = (now() - last_odom_recv_).seconds();
+    const double odom_age_s = odom_stamp_valid_
+      ? (now() - odom_stamp_).seconds() : since_recv_s;
     MpcCycleResult out;
     if (!have_traj_) {
       out.health = HealthState::NO_REFERENCE;
+    } else if (odomIsStale(odom_age_s, odom_max_age_s_, odom_stamp_valid_,
+                           odom_backwards_, since_recv_s)) {
+      out.health = HealthState::STATE_STALE;
+      out.reason = "odom stale/frozen/backwards (R9)";
     } else if ((now() - traj_stamp_).seconds() > traj_max_age_s_) {
       out.health = HealthState::STALE_REFERENCE;
     } else {
@@ -152,6 +176,10 @@ private:
   bool have_odom_ = false;
   bool have_traj_ = false;
   nav_msgs::msg::Odometry last_odom_;
+  rclcpp::Time odom_stamp_;        // last odom header.stamp (node clock)
+  bool odom_stamp_valid_ = false;
+  rclcpp::Time last_odom_recv_;    // node-clock receipt time
+  bool odom_backwards_ = false;    // stamp went backward (time jump)
   std::vector<TrackPoint> last_traj_;
   rclcpp::Time traj_stamp_;
   double traj_max_age_s_ = 5.0;

@@ -22,11 +22,16 @@ void buildLtvWindow(const std::vector<TrackPoint> & traj, double base_arc,
   A_d.resize(p.N);
   B_d.resize(p.N);
   anchors.resize(p.N + 1);
-  std::vector<double> arcs(p.N + 1);
+  // Tail holds the trajectory END: once the preview crosses it, every
+  // remaining sample is the end point (mirror of build_ltv_window's
+  // "pad the last arc at the end").  A zero-initialised tail sampled the
+  // path START and silently diverged from Python when head/tail v or kappa
+  // differ (2026-09-09 review).
+  std::vector<double> arcs(p.N + 1, traj.back().s);
   double s = base_arc;
   for (int j = 0; j <= p.N; ++j) {
+    if (s >= traj.back().s) break;   // the rest is already padded at the end
     arcs[j] = s;
-    if (s >= traj.back().s) break;
     const TrackPoint pt = sampleByArcRef(traj, s);
     s += p.Ts * std::max(pt.v, 0.0);
   }
