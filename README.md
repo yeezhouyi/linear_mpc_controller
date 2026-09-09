@@ -6,8 +6,6 @@
 
 同套算法有意实现两遍：Python 参考核心（`mpc_core/`，numpy dense ADMM）作为测试与基准的参考实现；C++/OSQP 核心（`include/` + `src/`，Eigen）是 ROS 2 节点链接的实时实现，每个 `ctest` 周期都会与 Python 版互相核对。
 
----
-
 ## 演示
 
 下方动图是参考核心（Python / numpy ADMM，无噪声、理想速度跟踪）在 `circle R=2` 基准上的离线闭环回放：
@@ -20,6 +18,18 @@
 # 复现动图（无需 ROS 2）：
 python tools/make_circle_demo.py
 # 产物：results/demo_20260909/circle_closed_loop.{json,gif}
+```
+
+### 折返路径投影错配 —— 投影链回放对照
+
+![投影链回放对照——折返路径同一位姿序列下，无状态最近点投影 vs 状态化投影+接受门（replay, 非闭环性能对比）](results/demo_20260909/projection_foldback_replay.png)
+
+> 同一姿态序列（含人为横向扰动与一次绑架拍）由参考核心分别送入 `controller_projection_mode="global"`（无状态最近点投影，每拍直接接受）与 `"windowed"`（窗口+朝向门+A5.1 接受门+A4.2 重捕获）两条**真实**投影链回放。橙色=无状态链跨股跳变与跳变带回的"伪进度"；绿色=状态化链拒绝跳变→SEEKING 归零→提交→PROBATION 限速→恢复。**这是投影模块的回放对照，不是两个控制器的闭环性能对比**：左图跳变位置展示几何投影错配，右图同时给出被接受门拒绝、重捕获与恢复的过程。证据 JSON：`results/demo_20260909/projection_foldback_replay.json`。
+
+```bash
+# 复现折返投影对照图（无需 ROS 2）：
+python tools/make_projection_figure.py
+# 产物：results/demo_20260909/projection_foldback_replay.{json,png}
 ```
 
 ---
@@ -100,6 +110,7 @@ flowchart LR
 python -m pytest mpc_core trajectory_tools benchmark_tools test -q
 python benchmark_tools/scripts/run_reference_benchmark.py --runs 1 --outdir outputs/bench_ref
 python tools/make_circle_demo.py        # → results/demo_20260909/circle_closed_loop.gif
+python tools/make_projection_figure.py  # → results/demo_20260909/projection_foldback_replay.png
 
 # 2) WSL2 / ROS 2 Jazzy（colcon + OSQP）
 cd ~/ros2_ws
@@ -155,7 +166,7 @@ mpc_rl_env/                冻结的 fast-env / SB3 适配器（保留但不属�
 system_identification/     一阶滞后 + 延迟拟合（仅仿真）
 include/ src/ test/        C++/Eigen 核心 + ctest（WSL2）
 ros2/ launch/ config/ worlds/ maps/    ROS 2 骨架（适配器 / 仲裁器 / Nav2 插件）
-tools/                     跨语言对照 + 演示动图生成器 + dump 工具
+tools/                     跨语言对照 + 演示动图生成器 + 投影回放对照图生成器 + dump 工具
 docs/                      模型 / 可行性 / 控制器对比 / 工程审计（见上）
 results/                   参考核心档案、冒烟测试、动图、归档 diff
 ```
