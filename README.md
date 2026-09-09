@@ -1,8 +1,10 @@
 # linear_mpc_controller
 
 差分底盘**线性时变 MPC 轨迹跟踪控制器**——`mpc_controller`（v0.2.1，ros2_control 线性 MPC 插件）的进阶项目，
+> **仓库导航**：默认展示 = `main` @ `v0.3.0-engineered`（2026-09-09 参考可行性增强封板）；
+> 历史研发线 `postseal2-planner-feasibility-20260909`、`cloud-*`、`main-seal-doc-*` 保留为工程证据。
 > 封板口径：对外数字唯一来源 = `ros2_tunnel_explorer` 的
-> `docs/seal_results.json` @ `bline-seal-20260908`（README 与简历同源渲染）；
+> `docs/seal_results.json` @ `v1.0.0-sealed`（README 与简历同源渲染）；
 > 本仓封板主张见文末「Day 10 封板主张」表。**残差 RL 支线已冻结，不作为投递主张**
 > （依据与复活条件：`docs/residual_rl_postmortem.md`）。
 
