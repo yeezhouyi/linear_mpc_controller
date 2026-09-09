@@ -74,6 +74,12 @@ python mpc_rl_env/algorithms/train_ppo_residual.py --seed 0
 - 无真实底盘：系统辨识结论限定在模型/仿真域（Sim2Sim），不声称实机部署（计划 R25/DoD）。
 - 碰撞安全门依赖 costmap/collision-monitor 接口，未接通前不宣称碰撞约束投影（KTD12）。
 - 软约束放宽、Pure Pursuit/PID 对照、SAC、探索路径接入（U11）为后续单元。
+- 无"完整原始路径单发成功"：seal `real_path_status`（raw 录制计划单发 STALL、16/250 超 `ω_max`）；
+  可用参考须先过可行性认证 `certify_reference` + `speed_profile` 沿路径剖面。参考可行性成果为
+  参考准备层/离线 + 单一生产入口（`adapter_pipeline.prepare_tracker_reference`）；ROS
+  `trajectory_server` 分发路径**未接线**该入口（集成边界）。
+- 无硬实时声明：含 Gazebo TurtleBot3 闭环冒烟在内均为 WSL2/Gazebo 仿真结果。
+- 最终验收、复现命令与冒烟证据：`docs/reference_feasibility_final.md`（`v0.3.0-engineered`）。
 
 ## 目录
 

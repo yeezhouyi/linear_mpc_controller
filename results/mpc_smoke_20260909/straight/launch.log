@@ -1,0 +1,26 @@
+[INFO] [launch]: All log files can be found below /home/zhouyi/.ros/log/2026-09-09-14-01-21-436421-LAPTOP-5GTV84L0-478
+[INFO] [launch]: Default logging verbosity is set to INFO
+[INFO] [bash-1]: process started with pid [483]
+[INFO] [bash-1]: process has finished cleanly [pid 483]
+[INFO] [gz-2]: process started with pid [495]
+[INFO] [create-3]: process started with pid [496]
+[INFO] [parameter_bridge-4]: process started with pid [497]
+[INFO] [parameter_bridge-5]: process started with pid [500]
+[INFO] [robot_state_publisher-6]: process started with pid [501]
+[INFO] [trajectory_server.py-7]: process started with pid [502]
+[INFO] [linear_mpc_node-8]: process started with pid [503]
+[INFO] [velocity_arbiter_node-9]: process started with pid [504]
+[parameter_bridge-5] [INFO] [1788933681.943901767] [cmd_vel_ts_bridge]: Creating ROS->GZ Bridge: [/cmd_vel (geometry_msgs/msg/TwistStamped) -> /cmd_vel (gz.msgs.Twist)] (Lazy 0)
+[robot_state_publisher-6] [INFO] [1788933681.949760276] [robot_state_publisher]: Robot initialized
+[parameter_bridge-5] [INFO] [1788933682.042561882] [cmd_vel_ts_bridge]: Passing message from ROS geometry_msgs/msg/TwistStamped to Gazebo gz.msgs.Twist (showing msg only once per type)
+[trajectory_server.py-7] [INFO] [1788933682.253974499] [trajectory_server]: publishing 'straight' (401 pts, len 8.00 m) on '/linear_mpc_node/reference'
+[create-3] [INFO] [1788933682.462870513] [spawn_tb3]: Entity creation successful.
+[INFO] [create-3]: process has finished cleanly [pid 496]
+[parameter_bridge-4] [INFO] [1788933682.979299655] [tracking_bridges]: Creating GZ->ROS Bridge: [/clock (gz.msgs.Clock) -> /clock (rosgraph_msgs/msg/Clock)] (Lazy 0)
+[parameter_bridge-4] [INFO] [1788933682.982568403] [tracking_bridges]: Creating GZ->ROS Bridge: [/joint_states (gz.msgs.Model) -> joint_states (sensor_msgs/msg/JointState)] (Lazy 0)
+[parameter_bridge-4] [INFO] [1788933682.986433274] [tracking_bridges]: Creating GZ->ROS Bridge: [/odom (gz.msgs.Odometry) -> odom (nav_msgs/msg/Odometry)] (Lazy 0)
+[parameter_bridge-4] [INFO] [1788933682.987963353] [tracking_bridges]: Creating GZ->ROS Bridge: [/tf (gz.msgs.Pose_V) -> tf (tf2_msgs/msg/TFMessage)] (Lazy 0)
+[parameter_bridge-4] [INFO] [1788933682.990598331] [tracking_bridges]: Creating GZ->ROS Bridge: [/scan (gz.msgs.LaserScan) -> scan (sensor_msgs/msg/LaserScan)] (Lazy 0)
+[gz-2] [1;33mWarning [Utils.cc:132][0m [/sdf/model[@name="turtlebot3_waffle"]/link[@name="imu_link"]/sensor[@name="tb3_imu"]/gz_frame_id:/tmp/lmpc_robot_ulegwtvx.sdf:L49]: XML Element[gz_frame_id], child of element[sensor], not defined in SDF. Copying[gz_frame_id] as children of [sensor].
+[gz-2] [1;33mWarning [Utils.cc:132][0m [/sdf/model[@name="turtlebot3_waffle"]/link[@name="base_scan"]/sensor[@name="hls_lfcd_lds"]/gz_frame_id:/tmp/lmpc_robot_ulegwtvx.sdf:L134]: XML Element[gz_frame_id], child of element[sensor], not defined in SDF. Copying[gz_frame_id] as children of [sensor].
+[gz-2] [1;33mWarning [Utils.cc:132][0m [/sdf/model[@name="turtlebot3_waffle"]/link[@name="camera_link"]/sensor[@name="intel_realsense_r200_depth"]/gz_frame_id:/tmp/lmpc_robot_ulegwtvx.sdf:L361]: XML Element[gz_frame_id], child of element[sensor], not defined in SDF. Copying[gz_frame_id] as children of [sensor].
