@@ -112,10 +112,12 @@ def omega_violations(kappa: np.ndarray, v: np.ndarray,
     n = min(kappa.size, v.size)
     if n == 0:
         return (np.array([], dtype=int), 0.0)
-    omega = np.abs(kappa[:n]) * np.abs(v[:n])
+    with np.errstate(invalid="ignore"):
+        omega = np.abs(kappa[:n]) * np.abs(v[:n])
     bound = omega_max * (1.0 + 1e-9)
     idx = np.nonzero(omega > bound)[0]
-    ratio = float(omega.max() / omega_max) if omega.size else 0.0
+    finite = np.isfinite(omega)
+    ratio = float(omega[finite].max() / omega_max) if finite.any() else 0.0
     return (idx, ratio)
 
 

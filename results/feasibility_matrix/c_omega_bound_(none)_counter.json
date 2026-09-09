@@ -1,0 +1,17 @@
+{
+ "scenario": "c_omega_bound",
+ "controller": "(none)",
+ "ref_variant": "counter",
+ "certified": false,
+ "cert_codes": [
+  "omega_bound"
+ ],
+ "controller_invoked": false,
+ "done_reason": "NOT_RUN_REFUSED",
+ "progress_ratio": 0.0,
+ "e_y_rms": 0.0,
+ "e_y_p95": 0.0,
+ "end_gap_m": null,
+ "qp_failures": 0,
+ "steps": 0
+}

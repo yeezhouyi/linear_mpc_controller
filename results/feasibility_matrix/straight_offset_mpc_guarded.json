@@ -1,0 +1,15 @@
+{
+ "scenario": "straight_offset",
+ "controller": "mpc",
+ "ref_variant": "guarded",
+ "certified": true,
+ "cert_codes": [],
+ "controller_invoked": true,
+ "done_reason": "COMPLETED",
+ "progress_ratio": 0.9757,
+ "e_y_rms": 0.1073,
+ "e_y_p95": 0.279,
+ "end_gap_m": 0.145,
+ "qp_failures": 0,
+ "steps": 398
+}

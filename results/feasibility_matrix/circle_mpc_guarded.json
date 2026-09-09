@@ -1,0 +1,15 @@
+{
+ "scenario": "circle",
+ "controller": "mpc",
+ "ref_variant": "guarded",
+ "certified": true,
+ "cert_codes": [],
+ "controller_invoked": true,
+ "done_reason": "COMPLETED",
+ "progress_ratio": 0.9882,
+ "e_y_rms": 0.004,
+ "e_y_p95": 0.0045,
+ "end_gap_m": 0.148,
+ "qp_failures": 0,
+ "steps": 838
+}

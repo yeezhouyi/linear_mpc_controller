@@ -1,0 +1,15 @@
+{
+ "scenario": "s_curve",
+ "controller": "mpc",
+ "ref_variant": "guarded",
+ "certified": true,
+ "cert_codes": [],
+ "controller_invoked": true,
+ "done_reason": "COMPLETED",
+ "progress_ratio": 0.9846,
+ "e_y_rms": 0.0258,
+ "e_y_p95": 0.0706,
+ "end_gap_m": 0.14,
+ "qp_failures": 0,
+ "steps": 607
+}

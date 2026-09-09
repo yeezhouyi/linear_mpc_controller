@@ -9,8 +9,10 @@ import numpy as np
 import pytest
 
 from trajectory_tools.reference_guard import (
+    certify_reference,
     reference_violations,
     reverse_arc_m,
+    validate_input_path,
 )
 
 
@@ -138,3 +140,83 @@ def test_empty_input_is_feasible():
     verdict = reference_violations(np.array([]), np.array([]))
     assert verdict["feasible"]
     assert verdict["reverse_arc_m"] == 0.0
+
+
+# --- Advanced round: input hygiene + single certifier ----------------------
+
+
+def test_nan_or_inf_in_motion_arrays_makes_reference_infeasible():
+    kappa = np.array([0.0, np.nan, 0.0, 0.0])
+    v = np.full(4, 0.3)
+    verdict = reference_violations(kappa, v, 2.0, s=np.arange(4.0))
+    assert not verdict["feasible"]
+    assert "nonfinite" in verdict["codes"]
+    assert verdict["omega_violation_count"] == 0
+
+    v2 = np.array([0.3, np.inf, 0.3, 0.3])
+    verdict2 = reference_violations(np.zeros(4), v2, 2.0, s=np.arange(4.0))
+    assert not verdict2["feasible"]
+    assert "nonfinite" in verdict2["codes"]
+
+
+def test_validate_input_path_flags_nonfinite_and_duplicates():
+    x = np.array([0.0, 1.0, 2.0, np.nan, 4.0])
+    y = np.zeros(5)
+    v0 = validate_input_path(x, y)
+    assert not v0["valid"]
+    assert "nonfinite" in v0["codes"]
+
+    xd = np.array([0.0, 1.0, 1.0, 2.0])     # duplicate at sample 2
+    v1 = validate_input_path(xd, np.zeros(4))
+    assert not v1["valid"]
+    assert "zero_length_segment" in v1["codes"]
+    assert 2 in v1["zero_length_indices"]
+
+
+def test_validate_input_path_detects_inplace_rotation():
+    x = np.array([0.0, 1.0, 1.0, 1.0])      # zero chord between 2->3
+    y = np.zeros(4)
+    yaw = np.array([0.0, 0.0, 0.0, np.pi / 2.0])   # ...that flips heading
+    v = validate_input_path(x, y, yaw=yaw)
+    assert not v["valid"]
+    assert "inplace_rotation" in v["codes"]
+    # Same duplicate without a heading flip is only zero-length.
+    v2 = validate_input_path(x, y, yaw=np.zeros(4))
+    assert "inplace_rotation" not in v2["codes"]
+    assert "zero_length_segment" in v2["codes"]
+
+
+def test_certify_reference_rejects_unsupported_with_reason_codes():
+    # sustained reverse -> motion layer refuses
+    x = np.linspace(0.0, 3.0, 61)
+    s = np.linspace(0.0, 3.0, 61)
+    v_rev = np.full_like(x, -0.3)
+    cert = certify_reference(x, np.zeros_like(x), np.zeros_like(x),
+                             v_rev, s)
+    assert not cert["feasible"]
+    assert "sustained_reverse" in cert["codes"]
+
+    # omega bound -> motion layer refuses
+    x4 = np.array([0.0, 1.0, 2.0, 3.0])
+    cert2 = certify_reference(x4, np.zeros(4),
+                              np.array([0.0, 10.0, 10.0, 0.0]),
+                              np.full(4, 0.5), np.arange(4.0))
+    assert not cert2["feasible"]
+    assert "omega_bound" in cert2["codes"]
+
+    # in-place rotation -> hygiene layer refuses even with clean motion
+    xr = np.array([0.0, 1.0, 1.0, 1.0])
+    yaw = np.array([0.0, 0.0, 0.0, np.pi / 2.0])
+    cert3 = certify_reference(xr, np.zeros(4), np.zeros(4),
+                              np.full(4, 0.3), np.arange(4.0), yaw=yaw)
+    assert not cert3["feasible"]
+    assert "inplace_rotation" in cert3["codes"]
+
+
+def test_certify_reference_passes_a_clean_dense_reference():
+    x = np.linspace(0.0, 6.0, 121)
+    s = np.linspace(0.0, 6.0, 121)
+    cert = certify_reference(x, np.zeros_like(x), np.zeros_like(x),
+                             np.full_like(x, 0.3), s, yaw=np.zeros_like(x))
+    assert cert["feasible"], cert["reasons"]
+    assert cert["codes"] == []

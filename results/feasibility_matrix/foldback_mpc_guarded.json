@@ -1,0 +1,15 @@
+{
+ "scenario": "foldback",
+ "controller": "mpc",
+ "ref_variant": "guarded",
+ "certified": true,
+ "cert_codes": [],
+ "controller_invoked": true,
+ "done_reason": "COMPLETED",
+ "progress_ratio": 0.9958,
+ "e_y_rms": 0.0103,
+ "e_y_p95": 0.0273,
+ "end_gap_m": 0.136,
+ "qp_failures": 0,
+ "steps": 2230
+}
