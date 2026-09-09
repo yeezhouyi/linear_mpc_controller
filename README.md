@@ -1,233 +1,167 @@
 # linear_mpc_controller
 
-**A linear time-varying MPC trajectory-tracking controller for differential-drive
-robots, with the safety filter, projection gate, and Nav2 plugin glue needed to
-run it under ROS 2 (research / engineering prototype, validated in Gazebo
-simulation -- no physical-robot deployment yet).** The package provides the
-same controller as a ROS-free Python reference core (for offline analysis and
-tests) and as a C++/Eigen/OSQP real-time node (for the `/cmd_vel` path).
+![ci](https://github.com/yeezhouyi/linear_mpc_controller/actions/workflows/ci.yml/badge.svg?branch=main)
 
-In the broader two-repo stack (`linear_mpc_controller` + `ros2_tunnel_explorer`),
-this package owns the *low-level tracking* layer as an INDEPENDENTLY validated
-controller: any planner that emits a Frenet-friendly path can feed through
-`Trajectory Adapter → Linear MPC (+ safety projection) → Velocity Arbiter →
-/cmd_vel`. The sealed coverage chain in the sister repo does NOT use this
-controller -- its chain controller is Nav2 RotationShim + DWB, and this plugin
-is only exercised against it in interface-level integration notes. Planning,
-frontier selection, coverage chains, and sealed result tables live in the
-sister repo `ros2_tunnel_explorer`.
+面向差速移动机器人的线性时变 MPC 跟踪控制器，提供 Python 参考实现与 C++/Eigen/OSQP 实现。重点研究折返路径的投影错配、参考可行性与故障恢复，已开展离线测试及 ROS 2/Gazebo 独立场景验证，**尚未完成实机验证**。
+
+同套算法有意实现两遍：Python 参考核心（`mpc_core/`，numpy dense ADMM）是测试与基准的审计真相；C++/OSQP 核心（`include/` + `src/`，Eigen）是 ROS 2 节点链接的实时实现，每个 `ctest` 周期都会与 Python 版互相核对。
 
 ---
 
-## Architecture
+## 演示
+
+下方动图是参考核心（Python / numpy ADMM，无噪声、理想速度跟踪）在 `circle R=2` 基准上的离线闭环回放：
+
+![参考核心 MPC 闭环——circle R=2（理想速度跟踪，非 Gazebo）](results/demo_20260909/circle_closed_loop.gif)
+
+> Python 参考核心的离线闭环演示，采用理想速度跟踪模型；**不是** Gazebo 录像或实机实验。Gazebo / TurtleBot3 仿真数字见 [关键结果](#关键结果)。
+
+```bash
+# 复现动图（无需 ROS 2）：
+python tools/make_circle_demo.py
+# 产物：results/demo_20260909/circle_closed_loop.{json,gif}
+```
+
+---
+
+## 三个核心贡献
+
+- **处理折返与邻近路径段的投影错配**：状态化投影门在 A3/A4/A5 上系统化拒绝不可行输入，避免把"参考本身就过不去"的失败留给下游；连续 5 跑基准 20/20 全 COMPLETED，QP 失败 0。
+- **实现状态化接受门与重捕获**：NORMAL→SEEKING→PROBATION→NORMAL 的闭环恢复由同一接缝（`safety/qp_fail_monitor.hpp` + `safety/reacquire_command.hpp`）单源驱动，行为测试覆盖了"SEEKING 不跑 QP、PROBATION 真跑 QP 且连续失败有界退出、观察期时长与输出边界"。ROS-free 单元 + 真实 OSQP 行为测试 16/16 通过。
+- **验证参考可行性及跨语言一致性**：所有进入控制器的参考先经过 `certify_reference` + `speed_profile`，同一参考喂入 Python 与 C++ 两个核心，四个对照向量（`projection_parity`、`projection_golden`、`window_tail_parity`、`adapter_speed_parity`）逐记录核对（参见 [关键结果](#关键结果) 表 2）。
+
+---
+
+## 架构
+
+控制器本体是一条闭环反馈，不是直线：
 
 ```mermaid
 flowchart LR
-    Plan["Path / plan<br/>(upper planner, e.g. tunnel explorer)"]
-    TS["Trajectory Server<br/>(closed-loop ref stream)"]
-    TA["Trajectory Adapter<br/>(reshape, certify, speed profile)"]
-    MPC["Linear MPC<br/>(LTV + condensed QP, OSQP backend)"]
-    Gate["Safety Gate<br/>(reacquire, projection, odom-staleness)"]
-    VA["Velocity Arbiter<br/>(safety / nav2 arbitration)"]
-    Cmd["/cmd_vel"]
-    Robot["Differential-drive chassis<br/>(Gazebo sim; not yet on hardware)"]
-
-    Plan --> TS --> TA --> MPC --> Gate --> VA --> Cmd --> Robot
+    REF["参考路径"] --> ADAPT["轨迹适配<br/>(reshape · certify · speed profile)"]
+    ADAPT --> MPC["线性 MPC<br/>(LTV + 凝聚 QP，OSQP 后端)"]
+    MPC --> ARB["速度仲裁"]
+    ARB --> CHASSIS["仿真底盘<br/>(Gazebo / TurtleBot3)"]
+    CHASSIS -. 状态反馈 .-> MPC
+    CHASSIS -. /odom .-> GATE["安全门<br/>(重捕获 · 投影 · odom 陈旧检测)"]
+    GATE -. 可行性 / 状态 .-> MPC
+    GATE -. 异常 .-> ARB
 ```
 
-The dataflow above is this package's OWN controller path and is validated
-standalone. The sealed coverage chain in the sister repo
-(`ros2_tunnel_explorer`) runs Nav2 RotationShim + DWB and does NOT call this
-controller (see Known limits).
+- 主链：**参考路径 → 轨迹适配 → MPC → 速度仲裁 → 仿真底盘**，底盘状态（位置、速度、`/odom`）回灌到 MPC 与安全门。
+- 安全门是另一条小回路，它把"投影 / 重捕获 / odom 陈旧检测"三类异常汇到一起仲裁，而不是每个异常独立降级。
+- **Nav2 插件集成**（独立小图，不在主链上）：
 
-The same algorithm exists twice on purpose: the Python reference core
-(`mpc_core/`, numpy dense ADMM) is the audited source of truth used by tests,
-the benchmark, and the closed-loop demo; the C++/OSQP core (`include/` + `src/`,
-Eigen) is what the ROS 2 node links against and is cross-checked against the
-Python one every `ctest` run.
+  ```mermaid
+  flowchart LR
+    PLANNER["上层规划<br/>(sister repo)"] -. Nav2 plugin .-> THIS["linear_mpc_controller"]
+    style THIS stroke-dasharray: 4 3
+    style PLANNER stroke-dasharray: 4 3
+  ```
+  与姐妹仓库 `ros2_tunnel_explorer` 的端到端连接**未完成验证**（见 [已知限制](#已知限制)）。
 
 ---
 
-## Demo
+## 关键结果
 
-The clip below is the deterministic reference-core (Python / numpy ADMM, no
-plant noise, perfect velocity tracking) running the formal `circle R=2`
-benchmark and replaying the executed path against the reference. The
-Gazebo / TurtleBot3 simulation numbers and the raw replay live next to it
-under `results/mpc_smoke_20260909/circle/` (`tb3_smoke.json`,
-`REPRODUCE.md`, `SHA256SUMS`).
+### 表 1：参考核心 4-track 基线
+*条件：纯 MPC、无传感器噪声、无 ROS 2；理想速度跟踪。*
 
-![Reference-core MPC closed loop on circle R=2](results/demo_20260909/circle_closed_loop.gif)
-
-```bash
-# Reproduce the clip locally (no ROS needed)
-python tools/make_circle_demo.py
-# Replays: tools/make_circle_demo.py → results/demo_20260909/circle_closed_loop.{json,gif}
-```
-
----
-
-## Conditional comparison tables
-
-### 1. Reference-core 4-track baseline *(condition: pure MPC, no plant noise, no ROS)*
-
-| track | done | e_y_rms | e_y_p95 | e_y_max | e_psi_rms | qp_fail |
+| track | 完成 | e_y_rms / m | e_y_p95 / m | e_y_max / m | e_psi_rms / rad | QP 失败 |
 |---|---|---|---|---|---|---|
 | straight | COMPLETED | 0.122 | 0.349 | 0.355 | 0.107 | 0 |
 | circle (R=2) | COMPLETED | 0.055 | 0.160 | 0.248 | 0.058 | 0 |
 | s_curve | COMPLETED | 0.073 | 0.229 | 0.255 | 0.069 | 0 |
 | u_turn | COMPLETED | 0.090 | 0.248 | 0.255 | 0.083 | 0 |
 
-Command: `python benchmark_tools/scripts/run_reference_benchmark.py --runs 1 --outdir outputs/bench_ref`. Full 5-run archive (20/20 COMPLETED, QP fail = 0): `results/ref_core_5run_baseline/benchmark_results.md`.
+命令：`python benchmark_tools/scripts/run_reference_benchmark.py --runs 1 --outdir outputs/bench_ref`。完整 5 跑档案（20/20 COMPLETED、QP 失败 0）：`results/ref_core_5run_baseline/benchmark_results.md`。
 
-### 2. Gazebo TurtleBot3 closed-loop smoke *(condition: WSL2 + ROS 2 Jazzy + colcon + Gazebo Harmonic, circle track, 90 s)*
+### 表 2：Gazebo / TurtleBot3 闭环烟测（circle）
+*条件：WSL2 + ROS 2 Jazzy + colcon + Gazebo Harmonic，circle 跑道，90 s。*
 
-| metric | value | threshold | result |
+| 指标 | 值 | 阈值 | 结果 |
 |---|---|---|---|
-| driven distance | 21.77 m | ≥ 3.0 m | PASS |
-| lateral error median | 8.9 mm | ≤ 0.3 m | PASS |
-| lateral error p95 | 34.4 mm | — | observed |
-| in-band fraction | 1.000 | ≥ 0.85 | PASS |
-| QP cycles with non-zero iterations | 2658 / 2658 | — | observed |
+| 行驶距离 / m | 21.77 | ≥ 3.0 | PASS |
+| 横向误差中位 / mm | 8.9 | ≤ 300 | PASS |
+| 横向误差 p95 / mm | 34.4 | — | observed |
+| 在带内比例 | 1.000 | ≥ 0.85 | PASS |
+| QP 非零迭代占比 | 2658 / 2658 | — | observed |
 
-Source: `results/mpc_smoke_20260909/circle/tb3_smoke.json` (`v0.3.1-evidence` tag). SHA-pinned and reproducible with `bash scripts/tb3_smoke.sh`; straight-track evidence in `results/mpc_smoke_20260909/straight/`.
+来源：`results/mpc_smoke_20260909/circle/tb3_smoke.json`（`v0.3.1-evidence` 标签）。SHA 钉死、可由 `bash scripts/tb3_smoke.sh` 复现。直线证据：`results/mpc_smoke_20260909/straight/`。
 
-### 3. C++ vs Python parity *(condition: colcon build, dump binary present in build tree)*
-
-| test | records / asserts | result |
-|---|---|---|
-| `projection_parity` (straight+circle+fold) | 61 / 61 records agree | PASS |
-| `projection_golden` (3 signed-in sequences) | 25 / 25 records agree, params identical | PASS |
-| `window_tail_parity` (3 window bases × 8 steps) | OK | PASS |
-| `adapter_speed_parity` (72 disc points) | max\|dκ\| = 2.97e-10, max\|dv\| = 2.29e-10 | PASS |
-
-Full suite `ctest 13/13`, `pytest test_ros_contract.py 10/10`. The parity scripts
-require their dump binary as `argv[1]` (CMake passes `$<TARGET_FILE:...>`), and
-return `exit 1` (not `exit 0`) when the binary is missing or stale — verified
-by deliberately renaming the dump during the fix.
-
-### 4. Feasibility guard comparison *(condition: same path, raw reference vs. guarded reference, 4 geometries)*
-
-| variant | max\|Δ progress\| | max\|Δ e_y_rms\| | max\|Δ QP fails\| |
-|---|---|---|---|
-| guarded vs raw reference (4 geometries) | 0.0009 | 0.0096 | 0 |
-
-The guard rejects infeasible inputs with a reason code before they reach the
-controller, instead of feeding them in and accepting the failure downstream.
-Full cell matrix + reason codes: `results/feasibility_matrix/feasibility_matrix.json`.
+其余数字（C++ vs Python 逐记录对照、`feasibility_guard` 4 几何矩阵）按需在 [技术文档索引](#技术文档索引) 查阅。
 
 ---
 
-## Reproduce
+## 快速复现
 
 ```bash
-# 1) ROS-free Python (Windows / Linux, no extra deps beyond numpy + pyyaml + pytest)
+# 1) ROS-free Python（Windows / Linux，仅需 numpy + pyyaml + pytest）
 python -m pytest mpc_core trajectory_tools benchmark_tools test -q
 python benchmark_tools/scripts/run_reference_benchmark.py --runs 1 --outdir outputs/bench_ref
-python tools/make_circle_demo.py          # → results/demo_20260909/circle_closed_loop.gif
+python tools/make_circle_demo.py        # → results/demo_20260909/circle_closed_loop.gif
 
-# 2) WSL2 / ROS 2 Jazzy (colcon + OSQP)
+# 2) WSL2 / ROS 2 Jazzy（colcon + OSQP）
 cd ~/ros2_ws
 colcon build --packages-select linear_mpc_controller
 source install/setup.bash
 ctest --test-dir build/linear_mpc_controller --output-on-failure
-bash src/linear_mpc_controller/scripts/tb3_smoke.sh   # Gazebo circle smoke
+bash src/linear_mpc_controller/scripts/tb3_smoke.sh     # Gazebo circle 烟测
 ```
 
 ---
 
-## Known limits
+## 已知限制
 
-- **Reference-core clip is offline**: the demo GIF is a deterministic
-  reference-core replay, not Gazebo; the Gazebo numbers live in
-  `results/mpc_smoke_20260909/circle/tb3_smoke.json`.
-- **0.15 s un-modelled actuator lag** stalls the MPC under aggressive
-  thresholds (see `results/controller_compare/`).`  No online lag
-  compensation is wired in this revision — the comparison script and the
-  acceptance thresholds are documented for the next round.
-- **Trajectory server must emit an open loop**: a closed-loop `ref_end ≈
-  ref_start` (circle / u-turn) makes `reference_complete` fire on cycle 0 and
-  the controller never starts moving. `tb3_smoke.sh` already accounts for this.
-- **No hard-realtime claim**: all results are WSL2 / Gazebo Harmonic sim.
-- **No full raw-record pass on the formal acceptance set**: the
-  pre-guard raw reference fails (250-waypoint plan, 16 over `ω_max`); any
-  reference must first pass `certify_reference` + `speed_profile`.
-- **Residual RL branch is frozen** and not part of the public claim
-  (postmortem + resurrection criteria in `docs/residual_rl_postmortem.md`).
+- **未做实机验证**——所有数字均来自 WSL2 / Gazebo Harmonic 仿真；徽章反映 CI 状态而非硬件跑。
+- **0.15 s 未建模执行器滞后**——在激进阈值下会卡死 MPC（见 `results/controller_compare/`）。当前版本未做在线滞后补偿，比较脚本与阈值留待下一轮。
+- **轨迹服务器必须开环**——闭环参考（circle / u-turn `ref_end ≈ ref_start`）会让 `reference_complete` 在 cycle 0 触发，控制器无法起步。`tb3_smoke.sh` 已处理。
+- **参考必须先经过可行门**——250 点路径中有 16 点超 `ω_max`，必须先通过 `certify_reference` + `speed_profile` 再喂入。
+- **Nav2 插件集成未与姐妹仓库端到端贯通**——`linear_mpc_controller` 独立验证；正式覆盖链用 Nav2 RotationShim + DWB（见姐妹仓库 [关键结果](https://github.com/yeezhouyi/ros2_tunnel_explorer#关键结果)）。
+- **残差 RL 分支已冻结**，不属于公开声明（postmortem 与复活条件见 `docs/residual_rl_postmortem.md`）。
 
 ---
 
-## Sealed references and engineering archive
+## 技术文档索引
 
-> The first screen above is the only thing new readers are expected to read.
-> Everything below is engineering archive: process stage numbers, tag
-> pinboards, and cross-repo result pointers preserved for accountability.
+> 首屏只要求读完以上。下面是工程档案，按"先用结论、过程可查"原则归档到 `docs/`。
 
-### Sealed / archived tags on this repo
+| 文件 | 内容 |
+|---|---|
+| `docs/mpc_model_derivation.md` | Frenet 误差、解析线性化、ZOH、凝聚 QP、降级阶梯 |
+| `docs/reference_feasibility_final.md` | A3 / A4 / A5 终态验收（签名路径） |
+| `docs/baseline_audit.md` | v0.2.1 冻结基线 + G1–G9 缺口审计 |
+| `docs/controller_compare.md` | 同底盘/参考/限幅下 MPC vs Pure Pursuit |
+| `docs/final_closeout_20260909.md` | TB3 烟测收尾与开放问题 |
+| `docs/ros2_interface_contract.md` | 话题 / 帧 / QoS / 完成 / 健康 / 单写者 |
+| `docs/engineering_checklist.md` | 六项能力验收矩阵 |
+| `docs/b6_demo.md` | B6 端到端录像（仿真） |
+| `docs/deploy_guide.md` | 部署指南 |
+| `docs/residual_rl_postmortem.md` | RL 分支冻结原因与复活条件 |
 
-- **Canonical**: `v0.3.0-engineered` @ `d920f4c` (2026-09-09 reference-feasibility close-out; the TB3 smoke `circle` evidence is sealed in `v0.3.1-evidence` @ `fdc2405`).
-- **Historical evidence (kept, not part of the public claim)**:
-  `cloud-seal-20260908`, `postseal-20260908`, `postseal2-20260909`,
-  `archive-rescue-be39ffe`, `baseline-19317dfa`, `v1.0.0-sealed` (lightweight
-  `@82b7a23`, supersede-not-replace marker before the heavy matrix was
-  completed).
+封板与归档标签：`v0.3.0-engineered` @ `d920f4c`（参考可行性收尾）、`v0.3.1-evidence` @ `fdc2405`（TB3 smoke circle 证据）。
 
-### Cross-repo result pointer (single source of truth)
-
-All public numbers that show up in the resume or in the table above MUST be
-sourced from `ros2_tunnel_explorer/docs/seal_results.json` @ `v1.0.0-sealed`
-(`b162fc1`). Editing any number on this repo without re-rendering that JSON
-is a seal-violation.
-
-### Engineering audit trail (process records)
-
-- `docs/baseline_audit.md` — frozen v0.2.1 baseline and the G1–G9 gap audit.
-- `docs/mpc_model_derivation.md` — Frenet error, analytic linearisation, ZOH, condensed QP, fallback ladder.
-- `docs/ros2_interface_contract.md` — topics / frames / QoS / completion / health / single-writer.
-- `docs/engineering_checklist.md` — six-capability acceptance matrix.
-- `docs/reference_feasibility_final.md` — A3/A4/A5 final acceptance (signed-in path).
-- `docs/controller_compare.md` — MPC vs Pure Pursuit under the same plant / reference / limits.
-- `docs/final_closeout_20260909.md` — TB3 smoke close-out and open issues (committed at `b0083ca`).
-- `docs/residual_rl_postmortem.md` — why the RL branch is frozen and how it would come back.
-- `docs/b6_demo.md`, `docs/deploy_guide.md` — integration / deployment notes.
-
-### Result archives (machine-readable)
-
-`results/ref_core_5run_baseline/`, `results/ref_core_baseline/`,
-`results/a8_replay/` (12-cell matrix + rescue-vs-main diff vs
-`archive-rescue-be39ffe`), `results/feasibility_matrix/`,
-`results/feasibility_regress/`, `results/controller_compare/`,
-`results/mpc_smoke_20260909/{circle,straight}/`,
-`results/demo_20260909/circle_closed_loop.{json,gif}`,
-`results/sysid_study/`, `results/attribution_study/`,
-`results/eval_residual_c7_iter1/`, `results/eval_residual_c8_iter2/`,
-`results/mpc_baseline_ros/`.
-
-### 4060 / Day 10 sealed claims (moved here from the old README front page)
-
-The Day 10 sealed-claim table (A5 stateful projection + acceptance gate,
-12-cell ablation, kinematic-feasibility audit, cross-language golden, B6B
-Nav2 plugin) and the 4060 acceptance table (A3 / A1 / A4 / U4 / sysid /
-B4 bridge) are reproduced verbatim in
-`docs/reference_feasibility_final.md` and `docs/final_closeout_20260909.md`
-respectively. The on-page version of this repo intentionally does NOT carry
-those tables — they are derived directly from the cross-repo seal JSON.
+公开数字一律指向姐妹仓库 `docs/seal_results.json` @ `v1.0.0-sealed`（`b162fc1`）作为单一来源。
 
 ---
 
-## Layout (one-screen reference)
+## 仓库结构
 
 ```
-mpc_core/                  ROS-free Python reference core (frenet / model / qp / mpc / fallback / episode)
-trajectory_tools/          reference trajectory generators + curvature / speed completion
-benchmark_tools/           metrics + manifest + offline benchmark harness
-mpc_rl_env/                frozen fast-env / SB3 adapter (kept, not a claim)
-system_identification/     1st-order lag + delay fit (sim only)
-include/ src/ test/        C++/Eigen core + ctest (WSL2)
-ros2/ launch/ config/ worlds/ maps/    ROS 2 skeleton (adapter / arbiter / nav2 plugin)
-tools/                     cross-language parity + demo-clip generator + dump tools
-docs/                      baseline_audit / mpc_model_derivation / ros2_interface_contract / engineering_checklist /
-                           reference_feasibility_final / controller_compare / final_closeout /
-                           b6_demo / deploy_guide / residual_rl_postmortem
-results/                   reference-core archives, smoke, demo clip, archive diffs
+mpc_core/                  ROS-free Python 参考核心（Frenet / 模型 / QP / MPC / 降级 / episode）
+trajectory_tools/          参考轨迹生成 + 曲率 / 速度补全
+benchmark_tools/           指标 + manifest + 离线基准脚本
+mpc_rl_env/                冻结的 fast-env / SB3 适配器（保留但不属公开声明）
+system_identification/     一阶滞后 + 延迟拟合（仅仿真）
+include/ src/ test/        C++/Eigen 核心 + ctest（WSL2）
+ros2/ launch/ config/ worlds/ maps/    ROS 2 骨架（适配器 / 仲裁器 / Nav2 插件）
+tools/                     跨语言对照 + 演示动图生成器 + dump 工具
+docs/                      模型 / 可行性 / 控制器对比 / 工程审计（见上）
+results/                   参考核心档案、烟测、动图、归档 diff
 ```
+
+---
+
+## License
+
+Apache-2.0
