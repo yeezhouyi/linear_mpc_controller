@@ -34,11 +34,18 @@ if GYM_AVAILABLE:
 
         def __init__(self, env) -> None:
             self.env = env
+            # Both the legacy env and opt-in T07 adapters expose dimensions;
+            # keep the historical constants as the fallback for old callers.
+            obs_dim = int(getattr(env, "observation_dim", OBS_DIM))
+            act_dim = int(getattr(env, "action_dim", ACT_DIM))
+            self.observation_dim = obs_dim
+            self.action_dim = act_dim
+            dtype = np.float32 if hasattr(env, "action_dim") else np.float64
             self.observation_space = spaces.Box(
-                low=-np.inf, high=np.inf, shape=(OBS_DIM,), dtype=np.float64
+                low=-np.inf, high=np.inf, shape=(obs_dim,), dtype=dtype
             )
             self.action_space = spaces.Box(
-                low=-1.0, high=1.0, shape=(ACT_DIM,), dtype=np.float64
+                low=-1.0, high=1.0, shape=(act_dim,), dtype=dtype
             )
 
         def reset(self, *, seed: int | None = None, options: dict | None = None):

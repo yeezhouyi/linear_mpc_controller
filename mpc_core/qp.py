@@ -31,6 +31,7 @@ class QpResult:
     dua_res: float = INF
     objective: float = 0.0
     solve_time_us: int = 0
+    detail: str = ""
 
     @property
     def ok(self) -> bool:
@@ -52,11 +53,13 @@ class AdmmQp:
         abs_tol: float = 1e-6,
         rel_tol: float = 1e-5,
         rho: float = 1.0,
+        time_limit_s: Optional[float] = None,
     ) -> None:
         self.max_iter = int(max_iter)
         self.abs_tol = float(abs_tol)
         self.rel_tol = float(rel_tol)
         self.rho = float(rho)
+        self.time_limit_s = None if time_limit_s is None else float(time_limit_s)
 
     def solve(
         self,
@@ -105,6 +108,10 @@ class AdmmQp:
         x_sol = x
 
         for it in range(1, self.max_iter + 1):
+            if self.time_limit_s is not None and time.perf_counter() - t0 >= self.time_limit_s:
+                return QpResult(status="TIMEOUT", iterations=it - 1,
+                                solve_time_us=int((time.perf_counter() - t0) * 1e6),
+                                detail="cooperative deadline before iteration")
             # ---- x update (pre-factored linear system) ----
             rhs = At @ (rho * z - y) - q
             t = np.linalg.solve(L, rhs)
@@ -130,6 +137,11 @@ class AdmmQp:
                 eps_p = eps_d = 0.0
             z = z_new
             x_sol = x
+            if self.time_limit_s is not None and time.perf_counter() - t0 >= self.time_limit_s:
+                return QpResult(status="TIMEOUT", iterations=it,
+                                pri_res=pri_res, dua_res=dua_res,
+                                solve_time_us=int((time.perf_counter() - t0) * 1e6),
+                                detail="cooperative deadline after iteration")
 
             if pri_res <= eps_p and dua_res <= eps_d:
                 status = "SOLVED"

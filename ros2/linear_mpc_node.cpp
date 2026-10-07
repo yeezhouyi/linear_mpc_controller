@@ -10,6 +10,8 @@
 //
 // NOTE: compile & integration gate = WSL2 colcon + Gazebo (see README).
 #include <chrono>
+#include <algorithm>
+#include <cmath>
 #include <memory>
 #include <string>
 #include <vector>
@@ -42,6 +44,7 @@ public:
     declare_parameter("omega_max", 2.0);
     declare_parameter("a_max", 1.0);
     declare_parameter("alpha_max", 2.0);
+    declare_parameter("qp_timeout_s", 0.01);
     declare_parameter("lookahead_m", 0.0);
     declare_parameter("traj_max_age_s", 5.0);
     declare_parameter("odom_max_age_s", 0.5);
@@ -65,11 +68,15 @@ public:
     p.omega_max = get_parameter("omega_max").as_double();
     p.a_max = get_parameter("a_max").as_double();
     p.alpha_max = get_parameter("alpha_max").as_double();
+    p.qp_timeout_s = get_parameter("qp_timeout_s").as_double();
     p.lookahead_m = get_parameter("lookahead_m").as_double();
     traj_max_age_s_ = get_parameter("traj_max_age_s").as_double();
     odom_max_age_s_ = get_parameter("odom_max_age_s").as_double();
     adap_.v_default = get_parameter("adapter.v_default").as_double();
     adap_.v_max = get_parameter("adapter.v_max").as_double();
+    v_min_ = p.v_min;
+    v_max_ = p.v_max;
+    omega_max_ = p.omega_max;
     mpc_ = std::make_unique<LinearMpcController>(p, std::vector<TrackPoint>{});
 
     odom_sub_ = create_subscription<nav_msgs::msg::Odometry>(
@@ -120,35 +127,61 @@ public:
 private:
   void cycle()
   {
-    if (!have_odom_) return;  // wait for state; no output (R9)
-    const auto & o = last_odom_.pose.pose;
-    const auto & tw = last_odom_.twist.twist;
-    // R9 odom freshness gate: max_age applies to the odom STAMP (a frozen
-    // stamp is detected because now() advances while it does not); an
-    // unstamped driver falls back to the receipt gap; a backwards stamp is
-    // stale.  Output is zero speed with a current stamp, per the interface
-    // contract ("state too old -> zero velocity").
-    const double since_recv_s = (now() - last_odom_recv_).seconds();
-    const double odom_age_s = odom_stamp_valid_
-      ? (now() - odom_stamp_).seconds() : since_recv_s;
     MpcCycleResult out;
-    if (!have_traj_) {
-      out.health = HealthState::NO_REFERENCE;
-    } else if (odomIsStale(odom_age_s, odom_max_age_s_, odom_stamp_valid_,
-                           odom_backwards_, since_recv_s)) {
+    if (!have_odom_) {
       out.health = HealthState::STATE_STALE;
-      out.reason = "odom stale/frozen/backwards (R9)";
-    } else if ((now() - traj_stamp_).seconds() > traj_max_age_s_) {
-      out.health = HealthState::STALE_REFERENCE;
+      out.reason = "NO_STATE";
     } else {
-      out = mpc_->computeCycle(o.position.x, o.position.y, yawFromQuat(o.orientation),
-        tw.linear.x, tw.angular.z);
+      const auto & o = last_odom_.pose.pose;
+      const auto & tw = last_odom_.twist.twist;
+      // R9 odom freshness gate: max_age applies to the odom STAMP (a frozen
+      // stamp is detected because now() advances while it does not); an
+      // unstamped driver falls back to the receipt gap; a backwards stamp is
+      // stale.  Output is zero speed with a current stamp, per the interface
+      // contract ("state too old -> zero velocity").
+      const double since_recv_s = (now() - last_odom_recv_).seconds();
+      const double odom_age_s = odom_stamp_valid_
+        ? (now() - odom_stamp_).seconds() : since_recv_s;
+      if (!have_traj_) {
+        out.health = HealthState::NO_REFERENCE;
+      } else if (odomIsStale(odom_age_s, odom_max_age_s_, odom_stamp_valid_,
+                             odom_backwards_, since_recv_s)) {
+        out.health = HealthState::STATE_STALE;
+        out.reason = "odom stale/frozen/backwards (R9)";
+      } else if ((now() - traj_stamp_).seconds() > traj_max_age_s_) {
+        out.health = HealthState::STALE_REFERENCE;
+      } else {
+        out = mpc_->computeCycle(o.position.x, o.position.y, yawFromQuat(o.orientation),
+          tw.linear.x, tw.angular.z);
+      }
     }
     geometry_msgs::msg::TwistStamped cmd;
     cmd.header.stamp = now();
-    const bool allow_cmd = !isCritical(out.health);
-    cmd.twist.linear.x = allow_cmd ? out.v_cmd : 0.0;
-    cmd.twist.angular.z = allow_cmd ? out.omega_cmd : 0.0;
+    double v_cmd = !isCritical(out.health) ? out.v_cmd : 0.0;
+    double omega_cmd = !isCritical(out.health) ? out.omega_cmd : 0.0;
+    if (!std::isfinite(v_cmd) || !std::isfinite(omega_cmd)) {
+      v_cmd = 0.0;
+      omega_cmd = 0.0;
+      out.health = HealthState::NAN_OUTPUT;
+      out.reason = "NAN_OUTPUT";
+      out.fallback_used = true;
+    } else {
+      const double safe_v = std::clamp(v_cmd, v_min_, v_max_);
+      const double safe_omega = std::clamp(omega_cmd, -omega_max_, omega_max_);
+      if (safe_v != v_cmd || safe_omega != omega_cmd) {
+        v_cmd = safe_v;
+        omega_cmd = safe_omega;
+        if (out.health == HealthState::OK) {
+          out.health = HealthState::SAFETY_CLAMPED;
+        }
+        out.reason = "SAFETY_CLAMPED";
+        out.fallback_used = true;
+      }
+    }
+    out.v_cmd = v_cmd;
+    out.omega_cmd = omega_cmd;
+    cmd.twist.linear.x = v_cmd;
+    cmd.twist.angular.z = omega_cmd;
     cmd_pub_->publish(cmd);
     publishDiagnostics(out);
   }
@@ -184,6 +217,9 @@ private:
   rclcpp::Time traj_stamp_;
   double traj_max_age_s_ = 5.0;
   double odom_max_age_s_ = 0.5;
+  double v_min_ = 0.0;
+  double v_max_ = 1.5;
+  double omega_max_ = 2.0;
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
   rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr traj_sub_;
   rclcpp::Publisher<geometry_msgs::msg::TwistStamped>::SharedPtr cmd_pub_;

@@ -5,6 +5,7 @@
 #include "linear_mpc_controller/mpc/qp_problem.hpp"
 
 #include <chrono>
+#include <algorithm>
 #include <cmath>
 #include <iostream>
 #include <osqp.h>
@@ -40,8 +41,8 @@ c_int toCsc(const Eigen::MatrixXd & dense, bool upper_only, std::vector<c_float>
 class OsqpSolver : public QpSolver
 {
 public:
-  OsqpSolver(int max_iter, double abs_tol, double rel_tol)
-  : max_iter_(max_iter), abs_tol_(abs_tol), rel_tol_(rel_tol) {}
+  OsqpSolver(int max_iter, double abs_tol, double rel_tol, double timeout_s)
+  : max_iter_(max_iter), abs_tol_(abs_tol), rel_tol_(rel_tol), timeout_s_(timeout_s) {}
 
   QpSolution solve(const Eigen::MatrixXd & H, const Eigen::VectorXd & q,
     const Eigen::MatrixXd & C, const Eigen::VectorXd & l, const Eigen::VectorXd & u,
@@ -96,6 +97,9 @@ public:
     settings.eps_rel = rel_tol_;
     settings.polish = 1;
     settings.warm_start = 1;
+#ifdef PROFILING
+    settings.time_limit = static_cast<c_float>(std::max(0.0, timeout_s_));
+#endif
 
     OSQPWorkspace * work = nullptr;
         const c_int ret = osqp_setup(&work, &data, &settings);
@@ -133,7 +137,15 @@ public:
     const auto t1 = std::chrono::steady_clock::now();
 
 
-    if (status_val != OSQP_SOLVED && status_val != OSQP_SOLVED_INACCURATE) {
+    if (status_val == OSQP_TIME_LIMIT_REACHED) {
+      sol.status = QpSolution::Status::kTimeout;
+      sol.iterations = static_cast<int>(work->info->iter);
+      sol.pri_res = static_cast<double>(work->info->pri_res);
+      sol.dua_res = static_cast<double>(work->info->dua_res);
+      osqp_cleanup(work);
+      sol.solve_time_us =
+        std::chrono::duration<double, std::micro>(t1 - t0).count();
+      return sol;
     }
 
     if (status_val == OSQP_SOLVED || status_val == OSQP_SOLVED_INACCURATE) {
@@ -159,13 +171,15 @@ private:
   int max_iter_;
   double abs_tol_;
   double rel_tol_;
+  double timeout_s_;
 };
 
 }  // namespace
 
-std::unique_ptr<QpSolver> makeOsqpSolver(int max_iter, double abs_tol, double rel_tol)
+std::unique_ptr<QpSolver> makeOsqpSolver(
+  int max_iter, double abs_tol, double rel_tol, double timeout_s)
 {
-  return std::make_unique<OsqpSolver>(max_iter, abs_tol, rel_tol);
+  return std::make_unique<OsqpSolver>(max_iter, abs_tol, rel_tol, timeout_s);
 }
 
 }  // namespace linear_mpc_controller

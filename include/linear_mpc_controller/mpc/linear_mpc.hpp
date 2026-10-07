@@ -26,6 +26,8 @@ struct MpcCycleResult
   QpSolution::Status qp_status = QpSolution::Status::kFailed;
   int qp_iterations = 0;
   double qp_time_us = 0.0;
+  double a0 = 0.0;
+  double alpha0 = 0.0;
   double constraint_violation = 0.0;
   bool fallback_used = false;
   Eigen::Vector4d e_used = Eigen::Vector4d::Zero();

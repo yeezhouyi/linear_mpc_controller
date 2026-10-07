@@ -154,17 +154,20 @@ public:
 };
 }  // namespace
 
-std::unique_ptr<QpSolver> makeDefaultSolver(int max_iter, double abs_tol, double rel_tol)
+std::unique_ptr<QpSolver> makeDefaultSolver(
+  int max_iter, double abs_tol, double rel_tol, double timeout_s)
 {
 #ifndef LINEAR_MPC_HAVE_OSQP
   (void)max_iter;
   (void)abs_tol;
   (void)rel_tol;
+  (void)timeout_s;
   return std::make_unique<UnavailableSolver>();
 #else
   // Forward-declared real factory implemented in the OSQP-enabled build.
-  extern std::unique_ptr<QpSolver> makeOsqpSolver(int max_iter, double abs_tol, double rel_tol);
-  return makeOsqpSolver(max_iter, abs_tol, rel_tol);
+  extern std::unique_ptr<QpSolver> makeOsqpSolver(
+    int max_iter, double abs_tol, double rel_tol, double timeout_s);
+  return makeOsqpSolver(max_iter, abs_tol, rel_tol, timeout_s);
 #endif
 }
 

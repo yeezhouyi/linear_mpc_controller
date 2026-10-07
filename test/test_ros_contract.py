@@ -65,6 +65,18 @@ def test_node_uses_odom_freshness_gate():
     assert "odom_backwards_" in node
 
 
+def test_node_publishes_zero_before_first_odom_and_sanitizes_output():
+    node = (ROS2 / "linear_mpc_node.cpp").read_text(encoding="utf-8")
+    assert 'if (!have_odom_) return' not in node
+    assert 'out.reason = "NO_STATE"' in node
+    assert "std::isfinite" in node
+    assert "std::clamp" in node
+    assert 'out.reason = "NAN_OUTPUT"' in node
+    assert 'out.reason = "SAFETY_CLAMPED"' in node
+    assert "out.v_cmd = v_cmd" in node
+    assert "out.omega_cmd = omega_cmd" in node
+
+
 def test_seeking_guard_comes_before_qp_fail_count():
     # SEEKING/probation handled before QP-failure counting so a no-QP
     # seeking cycle (default kFailed) cannot trip qp_fail_max (fix 3).

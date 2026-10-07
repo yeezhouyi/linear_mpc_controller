@@ -1,0 +1,13 @@
+# Explicit T07 v1 defaults. The legacy 12D/2D config remains unchanged.
+contract: t07_v1
+dt_s: 0.05
+delay_steps: 0
+measurement_noise_std: 0.0
+encoder_bias_v: 0.0
+imu_bias_omega: 0.0
+velocity_lag: 0.0
+v_limit: 0.30
+omega_limit: 1.20
+action_delta_omega_scale_radps: 0.05
+observation_dimension: 55
+action_dimension: 1

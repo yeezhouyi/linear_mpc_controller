@@ -52,7 +52,8 @@ public:
     if (!qpFailureAccountable(res)) {
       return false;
     }
-    if (res.qp_status == QpSolution::Status::kFailed) {
+    if (res.qp_status == QpSolution::Status::kFailed ||
+        res.qp_status == QpSolution::Status::kTimeout) {
       ++run_;
       if (run_ > max_fails_) {
         return true;

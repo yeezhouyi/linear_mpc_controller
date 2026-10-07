@@ -102,6 +102,15 @@ if(BUILD_TESTING)
     add_executable(test_qp_cycle test/test_qp_cycle.cpp)
     target_link_libraries(test_qp_cycle PRIVATE linear_mpc_core)
     add_test(NAME qp_cycle COMMAND test_qp_cycle)
+    add_executable(test_qp_timeout test/test_qp_timeout.cpp)
+    target_link_libraries(test_qp_timeout PRIVATE linear_mpc_core)
+    add_test(NAME qp_timeout COMMAND test_qp_timeout)
+    add_executable(controller_parity_dump tools/controller_parity_dump.cpp)
+    target_link_libraries(controller_parity_dump PRIVATE linear_mpc_core)
+    add_test(NAME controller_parity
+      COMMAND ${Python3_EXECUTABLE}
+        ${CMAKE_CURRENT_SOURCE_DIR}/tools/check_controller_parity.py
+        $<TARGET_FILE:controller_parity_dump>)
     add_executable(test_qp_golden test/test_qp_golden.cpp)
     target_compile_definitions(test_qp_golden PRIVATE
       GOLDEN_FILE="${CMAKE_CURRENT_SOURCE_DIR}/test/golden_qp_vectors.txt")

@@ -87,6 +87,21 @@ int main()
     check(m.run() == 0, "kSolved recovery still works after kApproximate");
   }
 
+  // -- 4b) kTimeout is an accountable solver failure ------------------------
+  {
+    QpFailMonitor m(2);
+    check(!m.record(makeRes(QpSolution::Status::kTimeout)),
+      "first timeout must not trip");
+    check(m.run() == 1, "timeout increments the failure run");
+    check(!m.record(makeRes(QpSolution::Status::kTimeout)),
+      "second timeout must not trip");
+    check(m.run() == 2, "two timeouts accumulate");
+    check(m.record(makeRes(QpSolution::Status::kTimeout)),
+      "third timeout must trip max=2");
+    check(m.run() == 3 && m.aborted(),
+      "timeout run uses the same abort threshold as kFailed");
+  }
+
   // -- 5) SEEKING cycles carry the default kFailed but are NOT accountable --
   {
     QpFailMonitor m(3);

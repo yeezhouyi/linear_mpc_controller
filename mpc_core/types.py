@@ -314,6 +314,8 @@ class MpcDiagnostics:
     fallback_used: bool = False
     fallback_stage: int = 0        # 0 none, 1 degrade speed, 2 zero/hold, 3 emergency
     cmd_vel: tuple = (0.0, 0.0)    # final (v_cmd, omega_cmd)
+    a0: float = 0.0                # first accepted acceleration input
+    alpha0: float = 0.0            # first accepted angular acceleration input
     e_ref: tuple = (0.0, 0.0, 0.0, 0.0)  # error state used this cycle
     accepted_arc: float = 0.0       # A5.1 baseline after this cycle (fwd-only)
     in_probation: bool = False      # A4.2 probation active (completion refused)

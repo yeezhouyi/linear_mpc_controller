@@ -49,11 +49,14 @@ struct MpcParams
   double tie_eps_m = 0.05;
   int qp_max_iter = 1500;
   double qp_abs_tol = 1e-6, qp_rel_tol = 1e-5;
+  // Offline core tests leave the deadline disabled; the ROS node loads the
+  // explicit 10 ms runtime budget from its parameter YAML.
+  double qp_timeout_s = 0.0;
 };
 
 struct QpSolution
 {
-  enum class Status { kSolved, kApproximate, kFailed };
+  enum class Status { kSolved, kApproximate, kTimeout, kFailed };
   Status status = Status::kFailed;
   Eigen::VectorXd u;         // stacked input sequence (2N)
   int iterations = 0;
@@ -75,7 +78,8 @@ public:
 
 /// Returns a solver.  Without OSQP: an UnavailableSolver (all solves FAILED).
 /// With LINEAR_MPC_HAVE_OSQP: the OSQP-backed dense solver.
-std::unique_ptr<QpSolver> makeDefaultSolver(int max_iter, double abs_tol, double rel_tol);
+std::unique_ptr<QpSolver> makeDefaultSolver(
+  int max_iter, double abs_tol, double rel_tol, double timeout_s = 0.0);
 
 /// Condensed QP for one cycle (decision z = [a_0..a_{N-1}, alpha_0..]).
 /// x0 is the current error state; refs are sampled every Ts at the preview arc.

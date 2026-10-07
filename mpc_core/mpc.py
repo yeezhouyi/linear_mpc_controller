@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import math
 import time
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import numpy as np
 
@@ -47,6 +47,14 @@ from mpc_core.types import (
 INF = float("inf")
 
 
+def first_control_acceleration(U: np.ndarray) -> tuple[float, float]:
+    """Return the first interleaved ``[a0, alpha0]`` control block."""
+    vector = np.asarray(U, dtype=float).reshape(-1)
+    if vector.size < NU:
+        raise ValueError("MPC solution must contain one control block")
+    return float(vector[A_IDX]), float(vector[ALPHA_IDX])
+
+
 class LinearMpcController:
     """Receding-horizon linear MPC over a reference ``Trajectory``."""
 
@@ -56,8 +64,10 @@ class LinearMpcController:
         self.fallback = FallbackPolicy(params)
         self.solver = AdmmQp(
             max_iter=params.qp_max_iter,
-            abs_tol=params.qp_abs_tol,
-            rel_tol=params.qp_rel_tol,
+            # Keep a numerical margin between the ADMM stopping test and the
+            # hard bounds reported for the applied first control.
+            abs_tol=0.25 * params.qp_abs_tol,
+            rel_tol=0.25 * params.qp_rel_tol,
         )
         self._warm: Optional[np.ndarray] = None
         self.cycle = 0
@@ -92,6 +102,7 @@ class LinearMpcController:
         self._stable_run = 0
         self._stable_seg = -1
         self._probation_left = 0
+        self._reacquire_events = 0
 
     def compute_cycle(self, state: KinematicState) -> MpcOutput:
         """One controller cycle at period ``Ts``. Pure core: no ROS time/TF
@@ -246,7 +257,9 @@ class LinearMpcController:
             U = res.x
             self._warm = np.roll(U, -NU)  # shift for next cycle
             self._warm[-NU:] = 0.0
-            a0, alpha0 = float(U[A_IDX]), float(U[NU + ALPHA_IDX])
+            a0, alpha0 = first_control_acceleration(U)
+            diag.a0 = a0
+            diag.alpha0 = alpha0
             v_cmd = err[V_IDX] + self.params.Ts * a0
             w_cmd = err[OMEGA_IDX] + self.params.Ts * alpha0
             diag.health = HealthState.OK
@@ -264,6 +277,17 @@ class LinearMpcController:
             if diag.health != HealthState.OK:
                 pass
             diag.cmd_vel = (v_safe, w_safe)
+            out.v_cmd, out.omega_cmd = v_safe, w_safe
+            return out
+
+        if res.status == "TIMEOUT":
+            v_safe, w_safe = self.fallback.apply((0.0, 0.0), HealthState.QP_TIMEOUT, diag)
+            diag.health = HealthState.QP_TIMEOUT
+            diag.reason = "qp timeout"
+            diag.qp_status = "TIMEOUT"
+            diag.fallback_used = True
+            diag.cmd_vel = (v_safe, w_safe)
+            self._warm = None
             out.v_cmd, out.omega_cmd = v_safe, w_safe
             return out
 
@@ -371,4 +395,8 @@ class LinearMpcController:
             v = xs[k, V_IDX]
             w = xs[k, OMEGA_IDX]
             viol = max(viol, p.v_min - v, v - p.v_max, abs(w) - p.omega_max)
+        for k in range(p.N):
+            a = float(U[k * NU + A_IDX])
+            alpha = float(U[k * NU + ALPHA_IDX])
+            viol = max(viol, abs(a) - p.a_max, abs(alpha) - p.alpha_max)
         return float(max(viol, 0.0))

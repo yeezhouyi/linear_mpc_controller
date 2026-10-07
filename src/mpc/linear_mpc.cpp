@@ -12,7 +12,8 @@ LinearMpcController::LinearMpcController(const MpcParams & params, std::vector<T
     params_.Ts, params_.v_min, params_.v_max, params_.omega_max,
     0.8, 10})
 {
-  solver_ = makeDefaultSolver(params_.qp_max_iter, params_.qp_abs_tol, params_.qp_rel_tol);
+  solver_ = makeDefaultSolver(
+    params_.qp_max_iter, params_.qp_abs_tol, params_.qp_rel_tol, params_.qp_timeout_s);
   // A4.2: the protocol reads the same declared numbers as Python's MpcParams.
   reacq_.p.max_reject_run = params_.max_reject_run;
   reacq_.p.v_probation = params_.v_probation;
@@ -31,7 +32,7 @@ void LinearMpcController::setReference(std::vector<TrackPoint> traj)
   gate_initialized_ = false;
   reject_run_ = 0;
   // A4.2: a new Path drops any in-flight reacquire (mirrors set_reference).
-  reacq_.reset();
+  reacq_.resetAll();
 }
 
 MpcCycleResult LinearMpcController::computeCycle(double px, double py, double yaw, double v, double omega)
@@ -151,6 +152,8 @@ MpcCycleResult LinearMpcController::computeCycle(double px, double py, double ya
     have_warm_ = true;
     const double a0 = sol.u(0);
     const double alpha0 = sol.u(1);
+    res.a0 = a0;
+    res.alpha0 = alpha0;
     double v_cmd = x0(kV) + params_.Ts * a0;
     const double w_cmd = x0(kOmega) + params_.Ts * alpha0;
     if (reject_run_ > 0) {
@@ -164,6 +167,17 @@ MpcCycleResult LinearMpcController::computeCycle(double px, double py, double ya
     res.health = h;
     res.fallback_used = stage >= 2;
     if (h != HealthState::OK) res.reason = "clamped/degraded by fallback";
+    return res;
+  }
+
+  if (sol.status == QpSolution::Status::kTimeout) {
+    int stage = 0;
+    HealthState h = HealthState::QP_TIMEOUT;
+    fallback_.apply(0.0, 0.0, h, res.v_cmd, res.omega_cmd, h, stage);
+    res.health = h;
+    res.reason = "qp timeout";
+    res.fallback_used = true;
+    have_warm_ = false;
     return res;
   }
 
@@ -188,6 +202,9 @@ double LinearMpcController::maxConstraintViolation(const Eigen::Vector4d & x0,
     x = prob.A_d()[k] * x + prob.B_d()[k] * U.segment<2>(2 * k);
     viol = std::max({viol, params_.v_min - x(kV), x(kV) - params_.v_max,
       std::fabs(x(kOmega)) - params_.omega_max});
+    viol = std::max({viol,
+      std::fabs(U(2 * k)) - params_.a_max,
+      std::fabs(U(2 * k + 1)) - params_.alpha_max});
   }
   return std::max(viol, 0.0);
 }

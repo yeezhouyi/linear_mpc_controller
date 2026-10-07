@@ -11,6 +11,7 @@ linear_mpc_node:
     omega_max: 2.0    # rad/s
     a_max: 1.0        # m/s^2
     alpha_max: 2.0    # rad/s^2
+    qp_timeout_s: 0.01 # s; OSQP profiling deadline, timeout -> safe degrade
     lookahead_m: 0.0  # keep 0 until C5 delay compensation is quantified
     traj_max_age_s: 5.0
     odom_max_age_s: 0.5
