@@ -58,11 +58,12 @@ def first_control_acceleration(U: np.ndarray) -> tuple[float, float]:
 class LinearMpcController:
     """Receding-horizon linear MPC over a reference ``Trajectory``."""
 
-    def __init__(self, params: MpcParams, traj: Optional[Trajectory] = None) -> None:
+    def __init__(self, params: MpcParams, traj: Optional[Trajectory] = None,
+                 solver: Optional[object] = None) -> None:
         self.params = params
         self.traj = traj
         self.fallback = FallbackPolicy(params)
-        self.solver = AdmmQp(
+        self.solver = solver if solver is not None else AdmmQp(
             max_iter=params.qp_max_iter,
             # Keep a numerical margin between the ADMM stopping test and the
             # hard bounds reported for the applied first control.
@@ -250,6 +251,9 @@ class LinearMpcController:
         diag.qp_iterations = res.iterations
         diag.qp_objective = res.objective
         diag.qp_status = res.status
+        diag.qp_raw_status = str(getattr(res, "raw_status", "") or "")
+        diag.qp_max_violation = float(getattr(res, "max_violation", float("nan")))
+        diag.qp_has_certificate = getattr(res, "dual_certificate", None) is not None
         del t0
 
         # ---- extract command / health ----------------------------------
@@ -301,6 +305,8 @@ class LinearMpcController:
         diag.health = health
         diag.reason = reason
         diag.fallback_used = True
+        # No accepted plan: unknown violation must not appear as zero.
+        diag.constraint_violation = float("nan")
         diag.cmd_vel = (v_safe, w_safe)
         out.v_cmd, out.omega_cmd = v_safe, w_safe
         return out

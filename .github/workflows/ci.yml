@@ -15,11 +15,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install numpy pytest osqp
+      - run: pip install -r requirements.txt
       - name: core unit tests (no ROS)
         run: |
-          python3 -m pytest mpc_core/tests trajectory_tools/tests -q
-          python3 -m pytest test/test_ros_contract.py -q
+          python3 -m pytest mpc_core trajectory_tools benchmark_tools mpc_rl_env system_identification test -o addopts= -q
 
   colcon-build:
     runs-on: ubuntu-latest
@@ -32,11 +31,14 @@ jobs:
             python3-colcon-common-extensions python3-pip \
             ros-jazzy-nav2-msgs ros-jazzy-nav2-core ros-jazzy-nav2-util \
             ros-jazzy-osqp-vendor
-          apt-get install -y python3-pytest
+          apt-get install -y python3-pytest python3-venv
+          python3 -m venv --system-site-packages /tmp/mpc-ci-venv
+          /tmp/mpc-ci-venv/bin/pip install -r requirements.txt
       - name: build + test
         shell: bash
         run: |
           source /opt/ros/jazzy/setup.bash
-          colcon build --packages-select linear_mpc_controller
+          source /tmp/mpc-ci-venv/bin/activate
+          colcon build --packages-select linear_mpc_controller --cmake-args -DPython3_EXECUTABLE=/tmp/mpc-ci-venv/bin/python3
           colcon test --packages-select linear_mpc_controller
           colcon test-result --verbose

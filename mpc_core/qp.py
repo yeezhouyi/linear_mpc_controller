@@ -31,6 +31,9 @@ class QpResult:
     dua_res: float = INF
     objective: float = 0.0
     solve_time_us: int = 0
+    raw_status: str = ""
+    max_violation: float = INF
+    dual_certificate: Optional[dict] = None
     detail: str = ""
 
     @property

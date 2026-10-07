@@ -310,6 +310,9 @@ class MpcDiagnostics:
     qp_time_us: int = 0
     qp_objective: float = 0.0
     constraint_violation: float = 0.0   # max |violation| of hard bounds (<=0 -> none)
+    qp_raw_status: str = ""
+    qp_max_violation: float = float("nan")
+    qp_has_certificate: bool = False
     clamped: bool = False          # output passed through the safety clamp
     fallback_used: bool = False
     fallback_stage: int = 0        # 0 none, 1 degrade speed, 2 zero/hold, 3 emergency

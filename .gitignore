@@ -8,3 +8,7 @@ outputs/
 build_core/
 log/
 build-osqp/
+install/
+artifacts/
+.venv/
+*.log

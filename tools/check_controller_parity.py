@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compare one complete C++ controller cycle with the Python repair tree."""
+"""Compare one complete C++ controller cycle with the Python core in this checkout."""
 
 from __future__ import annotations
 
@@ -11,11 +11,8 @@ from pathlib import Path
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
-REPAIR = Path("/home/zhouyi/mpc_review_worktrees/r6_core")
-if str(REPAIR) not in sys.path:
-    sys.path.insert(0, str(REPAIR))
 if str(ROOT) not in sys.path:
-    sys.path.append(str(ROOT))
+    sys.path.insert(0, str(ROOT))
 
 from mpc_core.mpc import LinearMpcController  # noqa: E402
 from mpc_core.qp_osqp import OsqpQp  # noqa: E402

@@ -2,9 +2,31 @@
 
 ![ci](https://github.com/yeezhouyi/linear_mpc_controller/actions/workflows/ci.yml/badge.svg?branch=main)
 
-面向差速移动机器人的线性时变 MPC 跟踪控制器，提供 Python 参考实现与 C++/Eigen/OSQP 实现。重点研究折返路径的投影错配、参考可行性与故障恢复，已开展离线测试及 ROS 2/Gazebo 独立场景验证，**尚未完成实机验证**。
+面向差速移动机器人的线性时变 MPC 跟踪控制器，提供 Python 参考实现与 C++/Eigen/OSQP 实现。重点研究折返路径的投影错配、参考可行性与故障恢复，已开展离线测试及 ROS 2/Gazebo 独立场景验证，**实机传感器与底盘基础验证已有记录，MPC 实车自主路线验收尚未完成**。
 
 同套算法有意实现两遍：Python 参考核心（`mpc_core/`，numpy dense ADMM）作为测试与基准的参考实现；C++/OSQP 核心（`include/` + `src/`，Eigen）是 ROS 2 节点链接的实时实现，每个 `ctest` 周期都会与 Python 版互相核对。
+
+
+## 从算法到真实小车的系统集成
+
+控制器已作为外部算法依赖接入 ROS 2 小车工程。两个仓库共同构成定位、规划、跟踪、指令仲裁与反馈链路：本仓库保存控制核心；[ROS 2 系统集成入口](https://github.com/yeezhouyi/ros2_tunnel_explorer/tree/coverage-cleaning-track/integrations/leap_mpc)保存桥接节点、Nav2/SLAM 配置、动作协调与命令 guard。
+
+- **算法能力**：LTV MPC、凝聚 QP、速度/加速度约束、投影接受门与重捕获；Python ADMM 保留为历史参考，新增可注入的 Python OSQP 后端供桥接使用，C++ OSQP 依赖独立。
+- **工程能力**：对接真实里程计和激光、隔离原始与工程坐标系、将 Nav2 的 map 路径变换为 MPC 参考、处理短路径与终点状态、隔离候选命令和物理输出。
+- **证据边界**：真实小车静止 SLAM 拓扑和监督短脉冲有本地记录；Nav2→MPC→guard 的运动闭环记录使用仿真被控对象，三段中 2 段成功。不能据此声称实车完成连续自主路线，MCU 失联停车也尚未验收。
+
+先看[实机排障与证据索引](https://github.com/yeezhouyi/ros2_tunnel_explorer/blob/coverage-cleaning-track/integrations/leap_mpc/docs/evidence.md)，再看本仓库的算法对照。集成分支为 `feat/vm-integration-20261007`，默认分支可能尚未包含这些更新。
+
+Python 验证无需 ROS：
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python -m pytest mpc_core trajectory_tools benchmark_tools mpc_rl_env system_identification test -o addopts= -q
+```
+
+ROS 2 Jazzy 构建时使用同一 Python 环境：`colcon build --packages-select linear_mpc_controller --cmake-args -DPython3_EXECUTABLE="$VIRTUAL_ENV/bin/python3"`。Humble 实机配置的部署复验单独记录在系统仓库。
 
 ## 演示
 
